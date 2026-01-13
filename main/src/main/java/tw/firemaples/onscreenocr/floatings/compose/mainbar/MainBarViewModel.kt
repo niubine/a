@@ -26,6 +26,7 @@ import tw.firemaples.onscreenocr.floatings.manager.NavigationAction
 import tw.firemaples.onscreenocr.floatings.manager.StateNavigator
 import tw.firemaples.onscreenocr.pages.setting.SettingManager
 import tw.firemaples.onscreenocr.translator.TranslationProviderType
+import tw.firemaples.onscreenocr.utils.UIUtils
 import javax.inject.Inject
 
 interface MainBarViewModel {
@@ -52,6 +53,7 @@ data class MainBarState(
     val isIdle: Boolean = true,
     val canStartRegionCapture: Boolean = false,
     val showCancelButton: Boolean = false,
+    val isDockedRight: Boolean = false,
     val langText: String = "",
     val translatorIcon: Int? = null,
 )
@@ -81,6 +83,9 @@ class MainBarViewModelImpl @Inject constructor(
     override val action = MutableSharedFlow<MainBarAction>()
 
     init {
+        updateDockedSide(
+            x = getMainBarInitialPositionUseCase.invoke().x
+        )
         stateNavigator.currentNavState
             .onEach { onNavigationStateChanges(it) }
             .launchIn(scope)
@@ -290,6 +295,14 @@ class MainBarViewModelImpl @Inject constructor(
     override fun onDragEnd(x: Int, y: Int) {
         scope.launch {
             saveLastMainBarPositionUseCase.invoke(x = x, y = y)
+            updateDockedSide(x)
+        }
+    }
+
+    private fun updateDockedSide(x: Int) {
+        val isRight = x > (UIUtils.screenSize[0] / 2)
+        state.update {
+            it.copy(isDockedRight = isRight)
         }
     }
 

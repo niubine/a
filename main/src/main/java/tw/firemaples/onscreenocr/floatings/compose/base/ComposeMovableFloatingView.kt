@@ -2,6 +2,8 @@ package tw.firemaples.onscreenocr.floatings.compose.base
 
 import android.animation.ValueAnimator
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.animation.OvershootInterpolator
 import androidx.compose.ui.geometry.Offset
@@ -41,8 +43,21 @@ abstract class ComposeMovableFloatingView(context: Context) : ComposeFloatingVie
         moveToEdgeOrFadeOut()
     }
 
+    private val moveToEdgeHandler = Handler(Looper.getMainLooper())
+    private val moveToEdgeRunnable = Runnable { if (moveToEdgeAfterMoved) moveToEdge() }
+
+    private fun scheduleMoveToEdge() {
+        moveToEdgeHandler.removeCallbacks(moveToEdgeRunnable)
+        moveToEdgeHandler.postDelayed(moveToEdgeRunnable, 5000L)
+    }
+
+    private fun cancelMoveToEdge() {
+        moveToEdgeHandler.removeCallbacks(moveToEdgeRunnable)
+    }
+
     val onDragStart: (Offset) -> Unit = { _ ->
         cancelFadeOut()
+        cancelMoveToEdge()
     }
     val onDragEnd: () -> Unit = {
         cancelFadeOut()
@@ -50,10 +65,12 @@ abstract class ComposeMovableFloatingView(context: Context) : ComposeFloatingVie
     }
     val onDragCancel: () -> Unit = {
         cancelFadeOut()
+        cancelMoveToEdge()
         moveToEdgeOrFadeOut()
     }
     val onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit = { change, dragAmount ->
         cancelFadeOut()
+        cancelMoveToEdge()
 
         val nextX = (params.x + (if (isAlignParentLeft) dragAmount.x else -dragAmount.x))
             .toInt().fixXPosition()
@@ -72,9 +89,7 @@ abstract class ComposeMovableFloatingView(context: Context) : ComposeFloatingVie
 
     private fun moveToEdgeOrFadeOut() {
         when {
-            moveToEdgeAfterMoved -> {
-                rootView.postDelayed({ moveToEdge() }, 5000L)
-            }
+            moveToEdgeAfterMoved -> scheduleMoveToEdge()
             fadeOutAfterMoved -> fadeOut()
             else -> cancelFadeOut()
         }
@@ -82,7 +97,7 @@ abstract class ComposeMovableFloatingView(context: Context) : ComposeFloatingVie
 
     //region Moving to edge
     fun moveToEdgeIfEnabled() {
-        rootView.postDelayed({ if (moveToEdgeAfterMoved) moveToEdge() }, 5000L)
+        scheduleMoveToEdge()
     }
 
     private fun moveToEdge() {

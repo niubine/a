@@ -5,8 +5,6 @@ import android.graphics.Point
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,7 +19,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,13 +30,11 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -63,7 +58,13 @@ fun MainBarContent(
         modifier = Modifier
             .alpha(if (state.drawMainBar) 1f else 0f)
     ) {
-        BoxWithConstraints {
+        BoxWithConstraints(
+            contentAlignment = if (state.isDockedRight) {
+                Alignment.TopEnd
+            } else {
+                Alignment.TopStart
+            }
+        ) {
             val maxToolbarWidth = maxWidth - FloatingBallSize - 12.dp
             val forceColumnLayout = isLandscape && maxToolbarWidth < 180.dp
 
@@ -92,10 +93,44 @@ fun MainBarContent(
                         onDragCancel = onDragCancel,
                         onDrag = onDrag,
                     )
+                }.let { row ->
+                    if (state.isDockedRight) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            FloatingBall(
+                                onClick = viewModel::onFloatingBallClicked,
+                                onDragStart = onDragStart,
+                                onDragEnd = onDragEnd,
+                                onDragCancel = onDragCancel,
+                                onDrag = onDrag,
+                            )
+                            if (state.toolbarVisible) {
+                                FloatingToolbar(
+                                    state = state,
+                                    isLandscape = true,
+                                    maxWidth = maxToolbarWidth,
+                                    onRegionCaptureClicked = viewModel::onRegionCaptureClicked,
+                                    onFullScreenCaptureClicked = viewModel::onFullScreenCaptureClicked,
+                                    onFullScreenTranslateClicked = viewModel::onFullScreenTranslateClicked,
+                                    onSettingsClicked = viewModel::onSettingsClicked,
+                                    onCancelClicked = viewModel::onCancelClicked,
+                                    onLanguageBlockClicked = viewModel::onLanguageBlockClicked,
+                                )
+                            }
+                        }
+                    } else {
+                        row
+                    }
                 }
             } else {
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                    horizontalAlignment = if (state.isDockedRight) {
+                        Alignment.End
+                    } else {
+                        Alignment.CenterHorizontally
+                    },
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     if (state.toolbarVisible) {
@@ -138,9 +173,9 @@ private fun FloatingToolbar(
     onLanguageBlockClicked: () -> Unit,
 ) {
     val content: @Composable () -> Unit = {
-        LanguageBlock(
-            langText = state.langText,
-            translatorIcon = state.translatorIcon,
+        ToolbarButton(
+            icon = R.drawable.ic_dictionary,
+            enabled = true,
             onClick = onLanguageBlockClicked,
         )
         Spacer(modifier = Modifier.size(4.dp))
@@ -196,40 +231,6 @@ private fun FloatingToolbar(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             content()
-        }
-    }
-}
-
-@Composable
-private fun LanguageBlock(
-    langText: String,
-    translatorIcon: Int? = null,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .height(32.dp)
-            .border(
-                width = 2.dp,
-                color = MaterialTheme.colorScheme.onSurface,
-                shape = RoundedCornerShape(4.dp),
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = langText,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        if (translatorIcon != null) {
-            Image(
-                painter = painterResource(id = translatorIcon),
-                contentDescription = "",
-                colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface),
-            )
         }
     }
 }
