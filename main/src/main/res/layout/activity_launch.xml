@@ -6,10 +6,6 @@
     android:layout_height="match_parent"
     tools:context=".pages.launch.LaunchActivity">
 
-    <include
-        android:id="@+id/admobAd"
-        layout="@layout/view_ad_activity_launch" />
-
     <androidx.constraintlayout.widget.Guideline
         android:id="@+id/line_centerVertical"
         android:layout_width="0dp"

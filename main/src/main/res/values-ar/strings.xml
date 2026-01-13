@@ -2,7 +2,6 @@
 <resources>
     <string name="app_name">EverTranslator (ترجمة الشاشة)</string>
     <string name="channel_default">قناة الإشعارات الافتراضية</string>
-    <string name="version_history_url">https://firemaples.github.io/EverTranslator/version_history.html</string>
 
     <string name="translation_provider_microsoft_azure">"مايكروسوفت Azure "</string>
     <string name="translation_provider_google_ml_kit">Google MLKit</string>
@@ -49,9 +48,6 @@
     <string name="pref_summary_on_keep_media_projection_resources">الحفاظ على الموارد حتى إعادة التشغيل</string>
     <string name="pref_summary_off_keep_media_projection_resources">الافراج عن الموارد بعد استخدامها</string>
     <string name="menu_setting">إعدادات</string>
-    <string name="menu_privacy_policy">سياسة الخصوصية</string>
-    <string name="menu_about">حول</string>
-    <string name="menu_version_history">التغيرات في الإصدارات السابقة</string>
     <string name="menu_readme">كيفية الاستخدام</string>
     <string name="menu_hide">إخفاء</string>
     <string name="menu_exit">خروج</string>
@@ -85,7 +81,6 @@
     <string name="msg_image_reader_format_unmatched">تم العثور على خطأ مؤقت، يرجى المحاولة مرة أخرى. (تنسيق قارئ الصور)</string>
     <string name="msg_translator_provider_does_not_support_the_ocr_lang">مزود الترجمة هذا لا يدعم لغة التعرف المختارة.</string>
     <string name="msg_please_restart_the_app_to_take_effect">يرجى إعادة تشغيل التطبيق ليصبح ساري المفعول</string>
-    <string name="title_version_history">التغيرات في الإصدارات السابقة</string>
     <string name="title_error">خطأ</string>
     <string name="title_guide">طريقة الأستخدام</string>
     <string name="title_failed_to_check_resources">فشل التحقق من الموارد</string>

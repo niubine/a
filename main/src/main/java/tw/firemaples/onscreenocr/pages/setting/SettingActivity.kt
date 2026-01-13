@@ -6,7 +6,6 @@ import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import tw.firemaples.onscreenocr.databinding.ActivitySettingBinding
-// import tw.firemaples.onscreenocr.utils.AdManager
 import tw.firemaples.onscreenocr.utils.fitCutoutInsets
 
 class SettingActivity : AppCompatActivity() {
@@ -29,8 +28,5 @@ class SettingActivity : AppCompatActivity() {
 
         binding.root.fitCutoutInsets()
 
-        // AdManager.loadBanner(binding.admobAd)
-
-//        MoPubAdManager.loadSettingPageBanner(this, findViewById(R.id.ad_settingPage))
     }
 }

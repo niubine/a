@@ -12,11 +12,9 @@ import tw.firemaples.onscreenocr.floatings.compose.base.ComposeMovableFloatingVi
 import tw.firemaples.onscreenocr.floatings.compose.base.collectOnLifecycleResumed
 import tw.firemaples.onscreenocr.floatings.compose.menu.MenuFloatingView
 import tw.firemaples.onscreenocr.floatings.compose.menu.MenuItem
-import tw.firemaples.onscreenocr.floatings.history.VersionHistoryView
 import tw.firemaples.onscreenocr.floatings.readme.ReadmeView
 import tw.firemaples.onscreenocr.floatings.translationSelectPanel.TranslationSelectPanel
 import tw.firemaples.onscreenocr.pages.setting.SettingActivity
-import tw.firemaples.onscreenocr.utils.Utils
 import javax.inject.Inject
 
 class MainBarFloatingView @Inject constructor(
@@ -44,10 +42,6 @@ class MainBarFloatingView @Inject constructor(
                     TranslationSelectPanel(context).attachToScreen()
                 }
 
-                is MainBarAction.OpenBrowser ->
-                    // TODO wait to be refactored
-                    Utils.openBrowser(action.url)
-
                 MainBarAction.OpenReadme ->
                     // TODO wait to be refactored
                     ReadmeView(context).attachToScreen()
@@ -55,10 +49,6 @@ class MainBarFloatingView @Inject constructor(
                 MainBarAction.OpenSettings ->
                     // TODO wait to be refactored
                     SettingActivity.start(context)
-
-                MainBarAction.OpenVersionHistory ->
-                    // TODO wait to be refactored
-                    VersionHistoryView(context).attachToScreen()
 
                 MainBarAction.HideMainBar ->
                     // TODO wait to be refactored
@@ -84,18 +74,6 @@ class MainBarFloatingView @Inject constructor(
             MenuItem(
                 key = MainBarMenuConst.MENU_SETTING,
                 text = stringResource(id = R.string.menu_setting),
-            ),
-            MenuItem(
-                key = MainBarMenuConst.MENU_PRIVACY_POLICY,
-                text = stringResource(id = R.string.menu_privacy_policy),
-            ),
-            MenuItem(
-                key = MainBarMenuConst.MENU_ABOUT,
-                text = stringResource(id = R.string.menu_about),
-            ),
-            MenuItem(
-                key = MainBarMenuConst.MENU_VERSION_HISTORY,
-                text = stringResource(id = R.string.menu_version_history),
             ),
             MenuItem(
                 key = MainBarMenuConst.MENU_README,

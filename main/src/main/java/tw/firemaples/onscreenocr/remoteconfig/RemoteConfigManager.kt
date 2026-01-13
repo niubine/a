@@ -15,8 +15,6 @@ internal const val KEY_MICROSOFT_KEY = "microsoft_key"
 internal const val KEY_MICROSOFT_KEY_GROUP_ID = "microsoft_key_group_id"
 internal const val KEY_TRAINED_DATA_URL = "trained_data_url_data_v1"
 internal const val KEY_TRAINED_DATA_FILES = "trained_data_files"
-internal const val KEY_PRIVACY_POLICY_URL = "privacy_policy_url"
-internal const val KEY_ABOUT_URL = "about_url"
 
 object RemoteConfigManager {
     private val logger: Logger by lazy { Logger(RemoteConfigManager::class) }
@@ -98,9 +96,4 @@ object RemoteConfigManager {
 //        return subNames.toTypedArray()
 //    }
 
-    val privacyPolicyUrl: String
-        get() = getString(KEY_PRIVACY_POLICY_URL)
-
-    val aboutUrl: String
-        get() = getString(KEY_ABOUT_URL)
 }

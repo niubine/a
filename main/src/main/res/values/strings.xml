@@ -3,7 +3,6 @@
 
     <string name="channel_default">Default notification channel</string>
 
-    <string name="version_history_url">https://firemaples.github.io/EverTranslator/version_history.html</string>
 
     <string name="translation_provider_microsoft_azure">Microsoft Azure</string>
     <string name="translation_provider_google_ml_kit">Google MLKit</string>
@@ -57,9 +56,6 @@
     <string name="pref_summary_off_limit_result_view_max_width">Dynamic width based on the content</string>
 
     <string name="menu_setting">Setting</string>
-    <string name="menu_privacy_policy">Privacy Policy</string>
-    <string name="menu_about">About</string>
-    <string name="menu_version_history">Version History</string>
     <string name="menu_readme">Readme</string>
     <string name="menu_hide">Hide</string>
     <string name="menu_exit">Exit</string>
@@ -94,7 +90,6 @@
     <string name="msg_grant_posting_notification_permission_rationale">Grant posting notification permission to restore/hide the app easier</string>
     <string name="btn_request_again">Request Again</string>
 
-    <string name="title_version_history">Version History</string>
     <string name="title_error">Error</string>
     <string name="title_guide">How to use</string>
     <string name="title_failed_to_check_resources">Failed to check resources</string>
