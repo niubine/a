@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
@@ -98,10 +99,11 @@ fun MainBarContent(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     if (state.toolbarVisible) {
+                        val toolbarMaxWidth = (this@BoxWithConstraints.maxWidth - 12.dp)
                         FloatingToolbar(
                             state = state,
                             isLandscape = false,
-                            maxWidth = maxWidth - 12.dp,
+                            maxWidth = toolbarMaxWidth,
                             onRegionCaptureClicked = viewModel::onRegionCaptureClicked,
                             onFullScreenCaptureClicked = viewModel::onFullScreenCaptureClicked,
                             onFullScreenTranslateClicked = viewModel::onFullScreenTranslateClicked,
