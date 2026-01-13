@@ -102,27 +102,25 @@ class GoogleMLKitTextRecognizer : TextRecognizer {
                 .addOnSuccessListener { result ->
                     val joiner = SettingManager.textBlockJoiner.joiner
                     val text = result.textBlocks
-                        .joinToString(separator = joiner) {
-                            it.getText(rtl)
-                                .let { text ->
-                                    if (SettingManager.removeEndDash) {
-                                        text.replace("-\n", "")
-                                            .replace("-$".toRegex(), "")
-                                    } else text
-                                }
-                                .let { text ->
-                                    if (SettingManager.removeLineBreakersInBlock) {
-                                        text.replace("\n ", " ")
-                                            .replace("\n", " ")
-                                    } else text
-                                }
+                        .joinToString(separator = joiner) { block ->
+                            formatBlockText(block.getText(rtl))
                         }
+
+                    val textBlocks = result.textBlocks.mapNotNull { block ->
+                        val boundingBox = block.boundingBox ?: return@mapNotNull null
+                        RecognizedTextBlock(
+                            text = formatBlockText(block.getText(rtl)),
+                            boundingBox = boundingBox,
+                        )
+                    }
 
                     it.resume(
                         RecognitionResult(
                             langCode = lang.toISO639(),
                             result = text,
-                            boundingBoxes = result.textBlocks.mapNotNull { it.boundingBox }),
+                            boundingBoxes = result.textBlocks.mapNotNull { it.boundingBox },
+                            textBlocks = textBlocks,
+                        ),
                     )
                 }
                 .addOnFailureListener { e ->
@@ -137,6 +135,22 @@ class GoogleMLKitTextRecognizer : TextRecognizer {
             }
         } else {
             this.text
+        }
+    }
+
+    private fun formatBlockText(text: String): String {
+        val withDashRemoved = if (SettingManager.removeEndDash) {
+            text.replace("-\n", "")
+                .replace("-$".toRegex(), "")
+        } else {
+            text
+        }
+
+        return if (SettingManager.removeLineBreakersInBlock) {
+            withDashRemoved.replace("\n ", " ")
+                .replace("\n", " ")
+        } else {
+            withDashRemoved
         }
     }
 

@@ -59,6 +59,12 @@
     <string name="menu_readme">Readme</string>
     <string name="menu_hide">Hide</string>
     <string name="menu_exit">Exit</string>
+    <string name="toolbar_region_capture">Region</string>
+    <string name="toolbar_confirm_area_capture">Confirm</string>
+    <string name="toolbar_fullscreen_capture">Full screen</string>
+    <string name="toolbar_fullscreen_translate">Full screen translate</string>
+    <string name="toolbar_settings">Settings</string>
+    <string name="toolbar_cancel">Cancel</string>
 
     <string name="text_ocr_language">OCR language</string>
     <string name="text_translation">Translation</string>
@@ -86,6 +92,8 @@
     <string name="msg_create_selection_area">Drag here to create a translation area</string>
     <string name="msg_image_reader_format_unmatched">Found temporary error, please try it again. (Image reader format)</string>
     <string name="msg_translator_provider_does_not_support_the_ocr_lang">This translation provider does not support the selected recognition language.</string>
+    <string name="error_full_screen_translation_not_supported">Full screen translation is not supported by the current translation provider.</string>
+    <string name="full_screen_translation_hint">Hold to show the original text, release to show translation, swipe up to close.</string>
     <string name="msg_please_restart_the_app_to_take_effect">Please restart the app to take effect</string>
     <string name="msg_grant_posting_notification_permission_rationale">Grant posting notification permission to restore/hide the app easier</string>
     <string name="btn_request_again">Request Again</string>

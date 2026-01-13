@@ -8,12 +8,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,6 +32,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
@@ -50,53 +55,147 @@ fun MainBarContent(
     onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
+    val isLandscape =
+        androidx.compose.ui.platform.LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     Box(
         modifier = Modifier
             .alpha(if (state.drawMainBar) 1f else 0f)
-            .background(
-                color = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(8.dp),
-            ),
     ) {
+        if (isLandscape) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (state.toolbarVisible) {
+                    FloatingToolbar(
+                        state = state,
+                        isLandscape = true,
+                        onRegionCaptureClicked = viewModel::onRegionCaptureClicked,
+                        onFullScreenCaptureClicked = viewModel::onFullScreenCaptureClicked,
+                        onFullScreenTranslateClicked = viewModel::onFullScreenTranslateClicked,
+                        onSettingsClicked = viewModel::onSettingsClicked,
+                        onCancelClicked = viewModel::onCancelClicked,
+                        onLanguageBlockClicked = viewModel::onLanguageBlockClicked,
+                    )
+                }
+                FloatingBall(
+                    onClick = viewModel::onFloatingBallClicked,
+                    onDragStart = onDragStart,
+                    onDragEnd = onDragEnd,
+                    onDragCancel = onDragCancel,
+                    onDrag = onDrag,
+                )
+            }
+        } else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (state.toolbarVisible) {
+                    FloatingToolbar(
+                        state = state,
+                        isLandscape = false,
+                        onRegionCaptureClicked = viewModel::onRegionCaptureClicked,
+                        onFullScreenCaptureClicked = viewModel::onFullScreenCaptureClicked,
+                        onFullScreenTranslateClicked = viewModel::onFullScreenTranslateClicked,
+                        onSettingsClicked = viewModel::onSettingsClicked,
+                        onCancelClicked = viewModel::onCancelClicked,
+                        onLanguageBlockClicked = viewModel::onLanguageBlockClicked,
+                    )
+                }
+                FloatingBall(
+                    onClick = viewModel::onFloatingBallClicked,
+                    onDragStart = onDragStart,
+                    onDragEnd = onDragEnd,
+                    onDragCancel = onDragCancel,
+                    onDrag = onDrag,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FloatingToolbar(
+    state: MainBarState,
+    isLandscape: Boolean,
+    onRegionCaptureClicked: () -> Unit,
+    onFullScreenCaptureClicked: () -> Unit,
+    onFullScreenTranslateClicked: () -> Unit,
+    onSettingsClicked: () -> Unit,
+    onCancelClicked: () -> Unit,
+    onLanguageBlockClicked: () -> Unit,
+) {
+    val content: @Composable () -> Unit = {
+        LanguageBlock(
+            langText = state.langText,
+            translatorIcon = state.translatorIcon,
+            onClick = onLanguageBlockClicked,
+        )
+        Spacer(modifier = Modifier.size(6.dp))
+        ToolbarButton(
+            icon = R.drawable.ic_selection,
+            text = stringResource(
+                id = if (state.canStartRegionCapture) {
+                    R.string.toolbar_confirm_area_capture
+                } else {
+                    R.string.toolbar_region_capture
+                }
+            ),
+            enabled = state.isIdle || state.canStartRegionCapture,
+            onClick = onRegionCaptureClicked,
+        )
+        ToolbarButton(
+            icon = R.drawable.ic_text_search,
+            text = stringResource(id = R.string.toolbar_fullscreen_capture),
+            enabled = state.isIdle,
+            onClick = onFullScreenCaptureClicked,
+        )
+        ToolbarButton(
+            icon = R.drawable.ic_translate,
+            text = stringResource(id = R.string.toolbar_fullscreen_translate),
+            enabled = state.isIdle,
+            onClick = onFullScreenTranslateClicked,
+        )
+        ToolbarButton(
+            icon = R.drawable.ic_settings,
+            text = stringResource(id = R.string.toolbar_settings),
+            enabled = true,
+            onClick = onSettingsClicked,
+        )
+        if (state.showCancelButton) {
+            ToolbarButton(
+                icon = R.drawable.ic_close,
+                text = stringResource(id = R.string.toolbar_cancel),
+                enabled = true,
+                onClick = onCancelClicked,
+            )
+        }
+    }
+
+    val containerModifier = Modifier
+        .background(
+            color = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(12.dp),
+        )
+        .padding(8.dp)
+
+    if (isLandscape) {
         Row(
-            modifier = Modifier
-                .padding(4.dp)
+            modifier = containerModifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            LanguageBlock(
-                langText = state.langText,
-                translatorIcon = state.translatorIcon,
-                onClick = viewModel::onLanguageBlockClicked,
-            )
-            if (state.displaySelectButton) {
-                Spacer(modifier = Modifier.size(4.dp))
-                MainBarButton(
-                    icon = R.drawable.ic_selection,
-                    onClick = viewModel::onSelectClicked,
-                )
-            }
-            if (state.displayTranslateButton) {
-                Spacer(modifier = Modifier.size(4.dp))
-                MainBarButton(
-                    icon = R.drawable.ic_translate,
-                    onClick = viewModel::onTranslateClicked,
-                )
-            }
-            if (state.displayCloseButton) {
-                Spacer(modifier = Modifier.size(4.dp))
-                MainBarButton(
-                    icon = R.drawable.ic_close,
-                    onClick = viewModel::onCloseClicked,
-                )
-            }
-            Spacer(modifier = Modifier.size(4.dp))
-            MenuButton(
-                onClick = viewModel::onMenuButtonClicked,
-                onDragStart = onDragStart,
-                onDragEnd = onDragEnd,
-                onDragCancel = onDragCancel,
-                onDrag = onDrag,
-            )
+            content()
+        }
+    } else {
+        Column(
+            modifier = containerModifier,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            content()
         }
     }
 }
@@ -136,34 +235,50 @@ private fun LanguageBlock(
 }
 
 @Composable
-private fun MainBarButton(
-    @DrawableRes
-    icon: Int,
+private fun ToolbarButton(
+    @DrawableRes icon: Int,
+    text: String,
+    enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    Image(
+    Column(
         modifier = Modifier
-            .size(32.dp)
-            .clickable(onClick = onClick)
-            .background(color = MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(4.dp))
-            .padding(4.dp),
-        painter = painterResource(id = icon),
-        contentDescription = "",
-        colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onPrimary),
-    )
+            .width(64.dp)
+            .alpha(if (enabled) 1f else 0.4f)
+            .clickable(enabled = enabled, onClick = onClick)
+            .background(
+                color = MaterialTheme.colorScheme.primary,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Image(
+            modifier = Modifier.size(20.dp),
+            painter = painterResource(id = icon),
+            contentDescription = "",
+            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onPrimary),
+        )
+        Text(
+            text = text,
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onPrimary,
+        )
+    }
 }
 
 @Composable
-private fun MenuButton(
+private fun FloatingBall(
     onClick: () -> Unit,
-    onDragStart: (Offset) -> Unit = { },
-    onDragEnd: () -> Unit = { },
-    onDragCancel: () -> Unit = { },
+    onDragStart: (Offset) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
     onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit,
 ) {
-    Image(
+    Box(
         modifier = Modifier
-            .size(32.dp)
+            .size(48.dp)
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragStart = onDragStart,
@@ -173,11 +288,19 @@ private fun MenuButton(
                 )
             }
             .clickable(onClick = onClick)
-            .padding(2.dp),
-        painter = painterResource(id = R.drawable.ic_menu_move),
-        colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface),
-        contentDescription = "",
-    )
+            .background(
+                color = MaterialTheme.colorScheme.primary,
+                shape = CircleShape,
+            )
+            .padding(10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.ic_translate),
+            contentDescription = "",
+            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onPrimary),
+        )
+    }
 }
 
 private class MainBarStateProvider : PreviewParameterProvider<MainBarState> {
@@ -186,16 +309,16 @@ private class MainBarStateProvider : PreviewParameterProvider<MainBarState> {
             MainBarState(
                 langText = "en>",
                 translatorIcon = R.drawable.ic_google_translate_dark_grey,
-                displaySelectButton = true,
-                displayTranslateButton = true,
-                displayCloseButton = true,
+                toolbarVisible = true,
+                isIdle = true,
             ),
             MainBarState(
                 langText = "en>tw",
                 translatorIcon = null,
-                displaySelectButton = true,
-                displayTranslateButton = true,
-                displayCloseButton = true,
+                toolbarVisible = true,
+                isIdle = false,
+                canStartRegionCapture = true,
+                showCancelButton = true,
             )
         ).asSequence()
 
@@ -217,11 +340,12 @@ private fun MainBarContentPreview(
         override fun getFadeOutAfterMoved(): Boolean = false
         override fun getFadeOutDelay(): Long = 0L
         override fun getFadeOutDestinationAlpha(): Float = 0f
-        override fun onMenuItemClicked(key: String?) = Unit
-        override fun onSelectClicked() = Unit
-        override fun onTranslateClicked() = Unit
-        override fun onCloseClicked() = Unit
-        override fun onMenuButtonClicked() = Unit
+        override fun onFloatingBallClicked() = Unit
+        override fun onRegionCaptureClicked() = Unit
+        override fun onFullScreenCaptureClicked() = Unit
+        override fun onFullScreenTranslateClicked() = Unit
+        override fun onSettingsClicked() = Unit
+        override fun onCancelClicked() = Unit
         override fun onAttachedToScreen() = Unit
         override fun onDragEnd(x: Int, y: Int) = Unit
         override fun onLanguageBlockClicked() = Unit

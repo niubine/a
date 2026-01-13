@@ -20,6 +20,7 @@ import tw.firemaples.onscreenocr.floatings.manager.StateOperator.Companion.SCREE
 import tw.firemaples.onscreenocr.log.FirebaseEvent
 import tw.firemaples.onscreenocr.pages.setting.SettingManager
 import tw.firemaples.onscreenocr.recognition.RecognitionResult
+import tw.firemaples.onscreenocr.recognition.RecognizedTextBlock
 import tw.firemaples.onscreenocr.recognition.TextRecognitionProviderType
 import tw.firemaples.onscreenocr.recognition.TextRecognizer
 import tw.firemaples.onscreenocr.screenshot.ScreenExtractor
@@ -29,6 +30,7 @@ import tw.firemaples.onscreenocr.translator.Translator
 import tw.firemaples.onscreenocr.translator.azure.MicrosoftAzureTranslator
 import tw.firemaples.onscreenocr.utils.Constants
 import tw.firemaples.onscreenocr.utils.Logger
+import tw.firemaples.onscreenocr.utils.UIUtils
 import tw.firemaples.onscreenocr.utils.setReusable
 import java.io.IOException
 import javax.inject.Inject
@@ -75,6 +77,18 @@ class StateOperatorImpl @Inject constructor(
 
                     is NavigationAction.NavigateToScreenCapturing ->
                         startScreenCapturing(
+                            ocrLang = action.ocrLang,
+                            ocrProvider = action.ocrProvider,
+                        )
+
+                    is NavigationAction.NavigateToFullScreenCapturing ->
+                        startFullScreenCapturing(
+                            ocrLang = action.ocrLang,
+                            ocrProvider = action.ocrProvider,
+                        )
+
+                    is NavigationAction.NavigateToFullScreenTranslation ->
+                        startFullScreenTranslation(
                             ocrLang = action.ocrLang,
                             ocrProvider = action.ocrProvider,
                         )
@@ -220,6 +234,79 @@ class StateOperatorImpl @Inject constructor(
         }
     }
 
+    private fun startFullScreenCapturing(
+        ocrLang: String,
+        ocrProvider: TextRecognitionProviderType,
+    ) = scope.launch {
+        if (!Translator.getTranslator().checkResources(scope)) {
+            return@launch
+        }
+
+        val screenRect = createFullScreenRect()
+        stateNavigator.updateState(
+            NavState.ScreenCircled(
+                parentRect = screenRect,
+                selectedRect = screenRect,
+            )
+        )
+        startScreenCapturing(
+            ocrLang = ocrLang,
+            ocrProvider = ocrProvider,
+        )
+    }
+
+    private fun startFullScreenTranslation(
+        ocrLang: String,
+        ocrProvider: TextRecognitionProviderType,
+    ) = scope.launch {
+        val translator = Translator.getTranslator()
+        if (!translator.checkResources(scope)) {
+            return@launch
+        }
+
+        if (translator.type.nonTranslation) {
+            showError(context.getString(R.string.error_full_screen_translation_not_supported))
+            return@launch
+        }
+
+        val screenRect = createFullScreenRect()
+        stateNavigator.updateState(NavState.FullScreenCapturing)
+        action.emit(StateOperatorAction.ShowFullScreenTranslationView)
+
+        delay(SCREENSHOT_DELAY)
+
+        var bitmap: Bitmap? = null
+        try {
+            FirebaseEvent.logStartCaptureScreen()
+            val fullBitmap = ScreenExtractor.extractBitmapFromScreen(
+                parentRect = screenRect,
+                cropRect = screenRect,
+            ).also {
+                bitmap = it
+            }
+            FirebaseEvent.logCaptureScreenFinished()
+
+            startFullScreenRecognition(
+                ocrLang = ocrLang,
+                ocrProvider = ocrProvider,
+                fullBitmap = fullBitmap,
+                screenRect = screenRect,
+            )
+        } catch (t: TimeoutCancellationException) {
+            logger.debug(t = t)
+            FirebaseEvent.logCaptureScreenFailed(t)
+            showError(context.getString(R.string.error_capture_screen_timeout))
+            bitmap?.setReusable()
+        } catch (t: Throwable) {
+            logger.debug(t = t)
+            FirebaseEvent.logCaptureScreenFailed(t)
+            val errorMsg =
+                t.message ?: context.getString(R.string.error_unknown_error_capturing_screen)
+            showError(errorMsg)
+            bitmap?.setReusable()
+        }
+    }
+
     private fun startRecognition(
         ocrLang: String,
         ocrProvider: TextRecognitionProviderType,
@@ -285,6 +372,176 @@ class StateOperatorImpl @Inject constructor(
             FirebaseEvent.logOCRFailed(
                 TextRecognizer.getRecognizer(ocrProvider).name, e
             )
+        }
+    }
+
+    private fun startFullScreenRecognition(
+        ocrLang: String,
+        ocrProvider: TextRecognitionProviderType,
+        fullBitmap: Bitmap,
+        screenRect: Rect,
+    ) = scope.launch {
+        stateNavigator.updateState(
+            NavState.FullScreenTextRecognizing(
+                parentRect = screenRect,
+                selectedRect = screenRect,
+                croppedBitmap = fullBitmap,
+            )
+        )
+
+        try {
+            val recognizer = TextRecognizer.getRecognizer(ocrProvider)
+            val language = TextRecognizer.getLanguage(ocrLang, ocrProvider)!!
+
+            FirebaseEvent.logStartOCR(recognizer.name)
+            var result = withContext(Dispatchers.Default) {
+                recognizer.recognize(
+                    lang = language,
+                    bitmap = fullBitmap,
+                )
+            }
+            logger.debug("On text recognized (full screen): $result")
+
+            if (SettingManager.removeSpacesInCJK) {
+                val cjkLang = arrayOf("zh", "ja", "ko")
+                if (cjkLang.contains(ocrLang.split("-").getOrNull(0))) {
+                    result = result.copy(
+                        result = result.result.replace(" ", "")
+                    )
+                }
+                logger.debug("Remove CJK spaces: $result")
+            }
+
+            FirebaseEvent.logOCRFinished(recognizer.name)
+
+            startFullScreenTranslation(
+                screenRect = screenRect,
+                fullBitmap = fullBitmap,
+                recognitionResult = result,
+            )
+        } catch (e: Exception) {
+            val error =
+                if (e.message?.contains(Constants.errorInputImageIsTooSmall) == true) {
+                    context.getString(R.string.error_selected_area_too_small)
+                } else
+                    e.message
+                        ?: context.getString(R.string.error_an_unknown_error_found_while_recognition_text)
+
+            logger.warn(t = e)
+            showError(error)
+            FirebaseEvent.logOCRFailed(
+                TextRecognizer.getRecognizer(ocrProvider).name, e
+            )
+        }
+    }
+
+    private fun startFullScreenTranslation(
+        screenRect: Rect,
+        fullBitmap: Bitmap,
+        recognitionResult: RecognitionResult,
+    ) = scope.launch {
+        try {
+            val translator = Translator.getTranslator()
+
+            stateNavigator.updateState(
+                NavState.FullScreenTextTranslating(
+                    parentRect = screenRect,
+                    selectedRect = screenRect,
+                    croppedBitmap = fullBitmap,
+                    recognitionResult = recognitionResult,
+                    translationProviderType = translator.type,
+                )
+            )
+
+            FirebaseEvent.logStartTranslationText(
+                text = recognitionResult.result,
+                fromLang = recognitionResult.langCode,
+                translator = translator,
+            )
+
+            val textBlocks = recognitionResult.textBlocks.ifEmpty {
+                listOf(
+                    RecognizedTextBlock(
+                        text = recognitionResult.result,
+                        boundingBox = screenRect,
+                    )
+                )
+            }
+
+            val translatedBlocks = mutableListOf<OverlayTextBlock>()
+            for (block in textBlocks) {
+                if (block.text.isBlank()) continue
+                when (val translationResult = translator.translate(
+                    text = block.text,
+                    sourceLangCode = recognitionResult.langCode,
+                )) {
+                    is TranslationResult.TranslatedResult -> translatedBlocks.add(
+                        OverlayTextBlock(
+                            text = translationResult.result,
+                            boundingBox = block.boundingBox,
+                        )
+                    )
+
+                    is TranslationResult.SourceLangNotSupport -> {
+                        FirebaseEvent.logTranslationSourceLangNotSupport(
+                            translator, recognitionResult.langCode,
+                        )
+                        showError(context.getString(R.string.msg_translator_provider_does_not_support_the_ocr_lang))
+                        return@launch
+                    }
+
+                    is TranslationResult.TranslationFailed -> {
+                        FirebaseEvent.logTranslationTextFailed(translator)
+                        val error = translationResult.error
+                        if (error is MicrosoftAzureTranslator.Error) {
+                            FirebaseEvent.logMicrosoftTranslationError(error)
+                        }
+                        if (error is IOException) {
+                            showError(context.getString(R.string.error_can_not_connect_to_translation_server))
+                        } else {
+                            FirebaseEvent.logException(error)
+                            showError(
+                                error.localizedMessage
+                                    ?: context.getString(R.string.error_unknown)
+                            )
+                        }
+                        return@launch
+                    }
+
+                    TranslationResult.OCROnlyResult,
+                    TranslationResult.OuterTranslatorLaunched -> {
+                        showError(context.getString(R.string.error_full_screen_translation_not_supported))
+                        return@launch
+                    }
+                }
+            }
+
+            val originalBlocks = textBlocks.map { block ->
+                OverlayTextBlock(
+                    text = block.text,
+                    boundingBox = block.boundingBox,
+                )
+            }
+
+            FirebaseEvent.logTranslationTextFinished(translator)
+
+            stateNavigator.updateState(
+                NavState.FullScreenTextTranslated(
+                    parentRect = screenRect,
+                    selectedRect = screenRect,
+                    croppedBitmap = fullBitmap,
+                    recognitionResult = recognitionResult,
+                    result = FullScreenTranslationResult(
+                        originalBlocks = originalBlocks,
+                        translatedBlocks = translatedBlocks,
+                        providerType = translator.type,
+                    ),
+                )
+            )
+        } catch (e: Exception) {
+            logger.warn(t = e)
+            FirebaseEvent.logException(e)
+            showError(e.message ?: "Unknown error found while translating")
         }
     }
 
@@ -420,8 +677,14 @@ class StateOperatorImpl @Inject constructor(
             stateNavigator.updateState(NavState.Idle)
 
         action.emit(StateOperatorAction.HideResultView)
+        action.emit(StateOperatorAction.HideFullScreenTranslationView)
 
         currentNavState.getBitmap()?.setReusable()
+    }
+
+    private fun createFullScreenRect(): Rect {
+        val screenSize = UIUtils.realSize
+        return Rect(0, 0, screenSize.x, screenSize.y)
     }
 
     private fun NavState.getBitmap(): Bitmap? =
@@ -434,6 +697,8 @@ sealed interface StateOperatorAction {
     data object HideScreenCirclingView : StateOperatorAction
     data object ShowResultView : StateOperatorAction
     data object HideResultView : StateOperatorAction
+    data object ShowFullScreenTranslationView : StateOperatorAction
+    data object HideFullScreenTranslationView : StateOperatorAction
     data class ShowErrorDialog(val error: String) : StateOperatorAction
 }
 

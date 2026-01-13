@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import tw.firemaples.onscreenocr.di.MainImmediateCoroutineScope
 import tw.firemaples.onscreenocr.floatings.base.FloatingView
+import tw.firemaples.onscreenocr.floatings.compose.fullscreen.FullScreenTranslationFloatingView
 import tw.firemaples.onscreenocr.floatings.compose.mainbar.MainBarFloatingView
 import tw.firemaples.onscreenocr.floatings.compose.resultview.ResultViewFloatingView
 import tw.firemaples.onscreenocr.floatings.compose.screencircling.ScreenCirclingFloatingView
@@ -26,6 +27,7 @@ class FloatingViewCoordinator @Inject constructor(
     private val mainBar: MainBarFloatingView,
     private val screenCirclingFloatingView: ScreenCirclingFloatingView,
     private val resultView: ResultViewFloatingView,
+    private val fullScreenTranslationView: FullScreenTranslationFloatingView,
 ) {
     private val logger: Logger by lazy { Logger(FloatingViewCoordinator::class) }
 
@@ -65,6 +67,12 @@ class FloatingViewCoordinator @Inject constructor(
 
                     StateOperatorAction.HideResultView ->
                         resultView.detachFromScreen()
+
+                    StateOperatorAction.ShowFullScreenTranslationView ->
+                        fullScreenTranslationView.attachToScreen()
+
+                    StateOperatorAction.HideFullScreenTranslationView ->
+                        fullScreenTranslationView.detachFromScreen()
 
                     is StateOperatorAction.ShowErrorDialog ->
                         context.showErrorDialog(action.error)
