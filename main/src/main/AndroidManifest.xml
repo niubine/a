@@ -32,6 +32,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.EverTranslator">
 
+        <provider
+            android:name="com.google.android.gms.ads.MobileAdsInitProvider"
+            tools:node="remove" />
+
         <activity
             android:name=".pages.launch.LaunchActivity"
             android:exported="true"
