@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
@@ -53,7 +54,8 @@ fun MainBarContent(
 ) {
     val state by viewModel.state.collectAsState()
     val isLandscape =
-        androidx.compose.ui.platform.LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
 
     Box(
         modifier = Modifier
@@ -66,63 +68,61 @@ fun MainBarContent(
                 Alignment.TopStart
             }
         ) {
-            val maxToolbarWidth = maxWidth - FloatingBallSize - 12.dp
+            val maxToolbarWidth = screenWidth - FloatingBallSize - 12.dp
             val forceColumnLayout = isLandscape && maxToolbarWidth < 180.dp
 
             if (isLandscape && !forceColumnLayout) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    if (state.toolbarVisible) {
-                        FloatingToolbar(
-                            state = state,
-                            isLandscape = true,
-                            maxWidth = maxToolbarWidth,
-                            onRegionCaptureClicked = viewModel::onRegionCaptureClicked,
-                            onFullScreenCaptureClicked = viewModel::onFullScreenCaptureClicked,
-                            onFullScreenTranslateClicked = viewModel::onFullScreenTranslateClicked,
-                            onSettingsClicked = viewModel::onSettingsClicked,
-                            onCancelClicked = viewModel::onCancelClicked,
-                            onLanguageBlockClicked = viewModel::onLanguageBlockClicked,
+                if (state.isDockedRight) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        FloatingBall(
+                            onClick = viewModel::onFloatingBallClicked,
+                            onDragStart = onDragStart,
+                            onDragEnd = onDragEnd,
+                            onDragCancel = onDragCancel,
+                            onDrag = onDrag,
                         )
-                    }
-                    FloatingBall(
-                        onClick = viewModel::onFloatingBallClicked,
-                        onDragStart = onDragStart,
-                        onDragEnd = onDragEnd,
-                        onDragCancel = onDragCancel,
-                        onDrag = onDrag,
-                    )
-                }.let { row ->
-                    if (state.isDockedRight) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            FloatingBall(
-                                onClick = viewModel::onFloatingBallClicked,
-                                onDragStart = onDragStart,
-                                onDragEnd = onDragEnd,
-                                onDragCancel = onDragCancel,
-                                onDrag = onDrag,
+                        if (state.toolbarVisible) {
+                            FloatingToolbar(
+                                state = state,
+                                isLandscape = true,
+                                maxWidth = maxToolbarWidth,
+                                onRegionCaptureClicked = viewModel::onRegionCaptureClicked,
+                                onFullScreenCaptureClicked = viewModel::onFullScreenCaptureClicked,
+                                onFullScreenTranslateClicked = viewModel::onFullScreenTranslateClicked,
+                                onSettingsClicked = viewModel::onSettingsClicked,
+                                onCancelClicked = viewModel::onCancelClicked,
+                                onLanguageBlockClicked = viewModel::onLanguageBlockClicked,
                             )
-                            if (state.toolbarVisible) {
-                                FloatingToolbar(
-                                    state = state,
-                                    isLandscape = true,
-                                    maxWidth = maxToolbarWidth,
-                                    onRegionCaptureClicked = viewModel::onRegionCaptureClicked,
-                                    onFullScreenCaptureClicked = viewModel::onFullScreenCaptureClicked,
-                                    onFullScreenTranslateClicked = viewModel::onFullScreenTranslateClicked,
-                                    onSettingsClicked = viewModel::onSettingsClicked,
-                                    onCancelClicked = viewModel::onCancelClicked,
-                                    onLanguageBlockClicked = viewModel::onLanguageBlockClicked,
-                                )
-                            }
                         }
-                    } else {
-                        row
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        if (state.toolbarVisible) {
+                            FloatingToolbar(
+                                state = state,
+                                isLandscape = true,
+                                maxWidth = maxToolbarWidth,
+                                onRegionCaptureClicked = viewModel::onRegionCaptureClicked,
+                                onFullScreenCaptureClicked = viewModel::onFullScreenCaptureClicked,
+                                onFullScreenTranslateClicked = viewModel::onFullScreenTranslateClicked,
+                                onSettingsClicked = viewModel::onSettingsClicked,
+                                onCancelClicked = viewModel::onCancelClicked,
+                                onLanguageBlockClicked = viewModel::onLanguageBlockClicked,
+                            )
+                        }
+                        FloatingBall(
+                            onClick = viewModel::onFloatingBallClicked,
+                            onDragStart = onDragStart,
+                            onDragEnd = onDragEnd,
+                            onDragCancel = onDragCancel,
+                            onDrag = onDrag,
+                        )
                     }
                 }
             } else {
@@ -134,8 +134,15 @@ fun MainBarContent(
                     },
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
+                    FloatingBall(
+                        onClick = viewModel::onFloatingBallClicked,
+                        onDragStart = onDragStart,
+                        onDragEnd = onDragEnd,
+                        onDragCancel = onDragCancel,
+                        onDrag = onDrag,
+                    )
                     if (state.toolbarVisible) {
-                        val toolbarMaxWidth = (this@BoxWithConstraints.maxWidth - 12.dp)
+                        val toolbarMaxWidth = (screenWidth - 12.dp)
                         FloatingToolbar(
                             state = state,
                             isLandscape = false,
@@ -148,13 +155,6 @@ fun MainBarContent(
                             onLanguageBlockClicked = viewModel::onLanguageBlockClicked,
                         )
                     }
-                    FloatingBall(
-                        onClick = viewModel::onFloatingBallClicked,
-                        onDragStart = onDragStart,
-                        onDragEnd = onDragEnd,
-                        onDragCancel = onDragCancel,
-                        onDrag = onDrag,
-                    )
                 }
             }
         }
