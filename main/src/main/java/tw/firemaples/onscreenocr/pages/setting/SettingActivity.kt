@@ -3,10 +3,14 @@ package tw.firemaples.onscreenocr.pages.setting
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import tw.firemaples.onscreenocr.R
 import tw.firemaples.onscreenocr.databinding.ActivitySettingBinding
-// import tw.firemaples.onscreenocr.utils.AdManager
+import tw.firemaples.onscreenocr.floatings.translationSelectPanel.TranslationSelectPanel
+import tw.firemaples.onscreenocr.pref.AppPref
+import tw.firemaples.onscreenocr.translator.TranslationProviderType
 import tw.firemaples.onscreenocr.utils.fitCutoutInsets
 
 class SettingActivity : AppCompatActivity() {
@@ -28,9 +32,48 @@ class SettingActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         binding.root.fitCutoutInsets()
+        binding.languageSwitchBar.setOnClickListener {
+            TranslationSelectPanel(this).attachToScreen()
+        }
+        updateLanguageSwitchBar()
+    }
 
-        // AdManager.loadBanner(binding.admobAd)
+    override fun onResume() {
+        super.onResume()
+        updateLanguageSwitchBar()
+    }
 
-//        MoPubAdManager.loadSettingPageBanner(this, findViewById(R.id.ad_settingPage))
+    private fun updateLanguageSwitchBar() {
+        val providerType = TranslationProviderType.fromKey(AppPref.selectedTranslationProvider)
+        val ocrLang = AppPref.selectedOCRLang
+        val translationLang = AppPref.selectedTranslationLang
+
+        val iconRes = when (providerType) {
+            TranslationProviderType.GoogleTranslateApp -> R.drawable.ic_google_translate_dark_grey
+            TranslationProviderType.BingTranslateApp -> R.drawable.ic_microsoft_bing
+            TranslationProviderType.OtherTranslateApp -> R.drawable.ic_open_in_app
+            else -> null
+        }
+
+        val text = when (providerType) {
+            TranslationProviderType.GoogleTranslateApp,
+            TranslationProviderType.BingTranslateApp,
+            TranslationProviderType.OtherTranslateApp -> "$ocrLang>"
+            TranslationProviderType.YandexTranslateApp -> "$ocrLang > Y"
+            TranslationProviderType.PapagoTranslateApp -> "$ocrLang > P"
+            TranslationProviderType.OCROnly -> " $ocrLang "
+            TranslationProviderType.MicrosoftAzure,
+            TranslationProviderType.GoogleMLKit,
+            TranslationProviderType.Deepl,
+            TranslationProviderType.MyMemory -> "$ocrLang>$translationLang"
+        }
+
+        binding.tvLanguageSwitchText.text = text
+        if (iconRes != null) {
+            binding.ivLanguageSwitchProvider.visibility = View.VISIBLE
+            binding.ivLanguageSwitchProvider.setImageResource(iconRes)
+        } else {
+            binding.ivLanguageSwitchProvider.visibility = View.GONE
+        }
     }
 }

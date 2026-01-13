@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="deepl_translationLangCode" translatable="false">
+        <item>zh</item>
+        <item>zh-CN</item>
+        <item>zh-TW</item>
+        <item>en</item>
+        <item>en-US</item>
+        <item>en-GB</item>
+        <item>pt</item>
+        <item>pt-BR</item>
+        <item>ja</item>
+        <item>ko</item>
+        <item>fr</item>
+        <item>de</item>
+        <item>es</item>
+        <item>ru</item>
+        <item>it</item>
+        <item>nl</item>
+        <item>pl</item>
+        <item>ar</item>
+        <item>tr</item>
+    </string-array>
+</resources>

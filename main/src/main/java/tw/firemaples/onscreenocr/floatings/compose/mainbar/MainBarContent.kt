@@ -5,22 +5,18 @@ import android.graphics.Point
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
@@ -28,12 +24,10 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -63,11 +57,6 @@ fun MainBarContent(
             modifier = Modifier
                 .padding(4.dp)
         ) {
-            LanguageBlock(
-                langText = state.langText,
-                translatorIcon = state.translatorIcon,
-                onClick = viewModel::onLanguageBlockClicked,
-            )
             if (state.displaySelectButton) {
                 Spacer(modifier = Modifier.size(4.dp))
                 MainBarButton(
@@ -96,40 +85,6 @@ fun MainBarContent(
                 onDragEnd = onDragEnd,
                 onDragCancel = onDragCancel,
                 onDrag = onDrag,
-            )
-        }
-    }
-}
-
-@Composable
-private fun LanguageBlock(
-    langText: String,
-    translatorIcon: Int? = null,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .height(32.dp)
-            .border(
-                width = 2.dp,
-                color = MaterialTheme.colorScheme.onSurface,
-                shape = RoundedCornerShape(4.dp),
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = langText,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        if (translatorIcon != null) {
-            Image(
-                painter = painterResource(id = translatorIcon),
-                contentDescription = "",
-                colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface),
             )
         }
     }
@@ -184,15 +139,11 @@ private class MainBarStateProvider : PreviewParameterProvider<MainBarState> {
     override val values: Sequence<MainBarState>
         get() = listOf(
             MainBarState(
-                langText = "en>",
-                translatorIcon = R.drawable.ic_google_translate_dark_grey,
                 displaySelectButton = true,
                 displayTranslateButton = true,
                 displayCloseButton = true,
             ),
             MainBarState(
-                langText = "en>tw",
-                translatorIcon = null,
                 displaySelectButton = true,
                 displayTranslateButton = true,
                 displayCloseButton = true,
@@ -224,7 +175,6 @@ private fun MainBarContentPreview(
         override fun onMenuButtonClicked() = Unit
         override fun onAttachedToScreen() = Unit
         override fun onDragEnd(x: Int, y: Int) = Unit
-        override fun onLanguageBlockClicked() = Unit
     }
 
     AppTheme {

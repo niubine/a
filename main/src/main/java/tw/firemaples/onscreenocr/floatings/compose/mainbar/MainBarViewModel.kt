@@ -6,17 +6,12 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import tw.firemaples.onscreenocr.R
-import tw.firemaples.onscreenocr.data.usecase.GetCurrentOCRDisplayLangCodeUseCase
 import tw.firemaples.onscreenocr.data.usecase.GetCurrentOCRLangUseCase
-import tw.firemaples.onscreenocr.data.usecase.GetCurrentTranslationLangUseCase
-import tw.firemaples.onscreenocr.data.usecase.GetCurrentTranslatorTypeUseCase
 import tw.firemaples.onscreenocr.data.usecase.GetMainBarInitialPositionUseCase
 import tw.firemaples.onscreenocr.data.usecase.SaveLastMainBarPositionUseCase
 import tw.firemaples.onscreenocr.di.MainImmediateCoroutineScope
@@ -25,9 +20,6 @@ import tw.firemaples.onscreenocr.floatings.manager.NavState
 import tw.firemaples.onscreenocr.floatings.manager.NavigationAction
 import tw.firemaples.onscreenocr.floatings.manager.StateNavigator
 import tw.firemaples.onscreenocr.pages.setting.SettingManager
-import tw.firemaples.onscreenocr.remoteconfig.RemoteConfigManager
-import tw.firemaples.onscreenocr.translator.TranslationProviderType
-import tw.firemaples.onscreenocr.utils.Logger
 import javax.inject.Inject
 
 interface MainBarViewModel {
@@ -43,14 +35,11 @@ interface MainBarViewModel {
     fun onMenuButtonClicked()
     fun onAttachedToScreen()
     fun onDragEnd(x: Int, y: Int)
-    fun onLanguageBlockClicked()
     fun onMenuItemClicked(key: String?)
 }
 
 data class MainBarState(
     val drawMainBar: Boolean = true,
-    val langText: String = "",
-    val translatorIcon: Int? = null,
     val displaySelectButton: Boolean = false,
     val displayTranslateButton: Boolean = false,
     val displayCloseButton: Boolean = false,
@@ -60,10 +49,7 @@ data class MainBarState(
 sealed interface MainBarAction {
     data object RescheduleFadeOut : MainBarAction
     data object MoveToEdgeIfEnabled : MainBarAction
-    data object OpenLanguageSelectionPanel : MainBarAction
     data object OpenSettings : MainBarAction
-    data class OpenBrowser(val url: String) : MainBarAction
-    data object OpenVersionHistory : MainBarAction
     data object OpenReadme : MainBarAction
     data object HideMainBar : MainBarAction
     data object ExitApp : MainBarAction
@@ -77,22 +63,16 @@ class MainBarViewModelImpl @Inject constructor(
     private val scope: CoroutineScope,
     private val stateNavigator: StateNavigator,
     private val getCurrentOCRLangUseCase: GetCurrentOCRLangUseCase,
-    private val getCurrentOCRDisplayLangCodeUseCase: GetCurrentOCRDisplayLangCodeUseCase,
-    private val getCurrentTranslatorTypeUseCase: GetCurrentTranslatorTypeUseCase,
-    private val getCurrentTranslationLangUseCase: GetCurrentTranslationLangUseCase,
     private val saveLastMainBarPositionUseCase: SaveLastMainBarPositionUseCase,
     private val getMainBarInitialPositionUseCase: GetMainBarInitialPositionUseCase,
 ) : MainBarViewModel {
     override val state = MutableStateFlow(MainBarState())
     override val action = MutableSharedFlow<MainBarAction>()
 
-    private val logger: Logger by lazy { Logger(this::class) }
-
     init {
         stateNavigator.currentNavState
             .onEach { onNavigationStateChanges(it) }
             .launchIn(scope)
-        subscribeLanguageStateChanges()
     }
 
     private suspend fun onNavigationStateChanges(navState: NavState) {
@@ -111,59 +91,6 @@ class MainBarViewModelImpl @Inject constructor(
                 displayTranslateButton = navState is NavState.ScreenCircled,
                 displayCloseButton =
                 navState == NavState.ScreenCircling || navState is NavState.ScreenCircled,
-            )
-        }
-        action.emit(MainBarAction.MoveToEdgeIfEnabled)
-    }
-
-    private fun subscribeLanguageStateChanges() {
-        combine(
-            getCurrentOCRDisplayLangCodeUseCase.invoke(),
-            getCurrentTranslatorTypeUseCase.invoke(),
-            getCurrentTranslationLangUseCase.invoke(),
-        ) { ocrLang, translatorType, translationLang ->
-            updateLanguageStates(
-                ocrLang = ocrLang,
-                translationProviderType = translatorType,
-                translationLang = translationLang,
-            )
-        }.launchIn(scope)
-    }
-
-    private suspend fun updateLanguageStates(
-        ocrLang: String,
-        translationProviderType: TranslationProviderType,
-        translationLang: String,
-    ) {
-        val icon = when (translationProviderType) {
-            TranslationProviderType.GoogleTranslateApp -> R.drawable.ic_google_translate_dark_grey
-            TranslationProviderType.BingTranslateApp -> R.drawable.ic_microsoft_bing
-            TranslationProviderType.OtherTranslateApp -> R.drawable.ic_open_in_app
-            TranslationProviderType.MicrosoftAzure,
-            TranslationProviderType.GoogleMLKit,
-            TranslationProviderType.MyMemory,
-            TranslationProviderType.PapagoTranslateApp,
-            TranslationProviderType.YandexTranslateApp,
-            TranslationProviderType.OCROnly -> null
-        }
-
-        val text = when (translationProviderType) {
-            TranslationProviderType.GoogleTranslateApp,
-            TranslationProviderType.BingTranslateApp,
-            TranslationProviderType.OtherTranslateApp -> "$ocrLang>"
-
-            TranslationProviderType.YandexTranslateApp -> "$ocrLang > Y"
-            TranslationProviderType.PapagoTranslateApp -> "$ocrLang > P"
-            TranslationProviderType.OCROnly -> " $ocrLang "
-            TranslationProviderType.MicrosoftAzure,
-            TranslationProviderType.GoogleMLKit,
-            TranslationProviderType.MyMemory -> "$ocrLang>$translationLang"
-        }
-
-        state.update {
-            it.copy(
-                langText = text,
-                translatorIcon = icon,
             )
         }
         action.emit(MainBarAction.MoveToEdgeIfEnabled)
@@ -238,12 +165,6 @@ class MainBarViewModelImpl @Inject constructor(
         }
     }
 
-    override fun onLanguageBlockClicked() {
-        scope.launch {
-            action.emit(MainBarAction.OpenLanguageSelectionPanel)
-        }
-    }
-
     override fun onMenuItemClicked(key: String?) {
         scope.launch {
             state.update {
@@ -258,15 +179,6 @@ class MainBarViewModelImpl @Inject constructor(
             when (key) {
                 MainBarMenuConst.MENU_SETTING ->
                     action.emit(MainBarAction.OpenSettings)
-
-                MainBarMenuConst.MENU_PRIVACY_POLICY ->
-                    action.emit(MainBarAction.OpenBrowser(RemoteConfigManager.privacyPolicyUrl))
-
-                MainBarMenuConst.MENU_ABOUT ->
-                    action.emit(MainBarAction.OpenBrowser(RemoteConfigManager.aboutUrl))
-
-                MainBarMenuConst.MENU_VERSION_HISTORY ->
-                    action.emit(MainBarAction.OpenVersionHistory)
 
                 MainBarMenuConst.MENU_README ->
                     action.emit(MainBarAction.OpenReadme)
