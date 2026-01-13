@@ -29,7 +29,7 @@ interface DeeplAPIService {
 @Keep
 data class DeeplTranslateRequest(
     @Json(name = "text")
-    val text: String,
+    val text: List<String>,
     @Json(name = "source_lang")
     val sourceLang: String?,
     @Json(name = "target_lang")
@@ -52,4 +52,8 @@ data class DeeplTranslateResponse(
 data class DeeplTranslation(
     @Json(name = "text")
     val text: String?,
+    @Json(name = "detected_source_language")
+    val detectedSourceLanguage: String?,
+    @Json(name = "is_language_detection_confident")
+    val isLanguageDetectionConfident: Boolean?,
 )

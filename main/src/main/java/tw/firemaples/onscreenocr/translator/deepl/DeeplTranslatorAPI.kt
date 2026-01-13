@@ -17,7 +17,7 @@ object DeeplTranslatorAPI {
 
         val response = apiService.translate(
             DeeplTranslateRequest(
-                text = text,
+                text = listOf(text),
                 sourceLang = sourceLang,
                 targetLang = targetLang,
                 languageModel = LANGUAGE_MODEL,
@@ -33,12 +33,20 @@ object DeeplTranslatorAPI {
             )
         }
 
-        val translatedText = response.body()
+        val translatedTexts = response.body()
             ?.translations
-            ?.firstOrNull()
-            ?.text
-            ?.takeIf { it.isNotBlank() }
+            ?.mapNotNull { it.text?.takeIf(String::isNotBlank) }
             ?: return Result.failure(IllegalStateException("Got empty translation result"))
+
+        if (translatedTexts.isEmpty()) {
+            return Result.failure(IllegalStateException("Got empty translation result"))
+        }
+
+        val translatedText = if (translatedTexts.size == 1) {
+            translatedTexts.first()
+        } else {
+            translatedTexts.joinToString(separator = "\n")
+        }
 
         logger.debug("Got translation result: $translatedText")
         return Result.success(translatedText)
