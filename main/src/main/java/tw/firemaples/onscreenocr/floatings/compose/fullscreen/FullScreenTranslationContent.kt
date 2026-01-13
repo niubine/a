@@ -69,10 +69,8 @@ fun FullScreenTranslationContent(
                         if (change.position.y - startPosition.y < -swipeThreshold) {
                             shouldDismiss = true
                             viewModel.onSwipeToDismiss()
-                            change.consumeAllChanges()
                             break
                         }
-                        change.consumeAllChanges()
                     }
                     if (!shouldDismiss) {
                         viewModel.onPressEnd()
