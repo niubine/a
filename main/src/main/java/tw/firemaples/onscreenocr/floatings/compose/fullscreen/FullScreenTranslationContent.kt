@@ -19,7 +19,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.consume
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -70,10 +69,10 @@ fun FullScreenTranslationContent(
                         if (change.position.y - startPosition.y < -swipeThreshold) {
                             shouldDismiss = true
                             viewModel.onSwipeToDismiss()
-                            change.consume()
+                            change.consumeAllChanges()
                             break
                         }
-                        change.consume()
+                        change.consumeAllChanges()
                     }
                     if (!shouldDismiss) {
                         viewModel.onPressEnd()
