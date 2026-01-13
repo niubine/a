@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [ "master", "dep/**" ]
+  pull_request:
+    branches: [ "master", "dep/**", "refactor/**" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build with Gradle (Optimized)
+      # 关键修改：
+      # 1. -Pandroid.injected.build.abi.filters=arm64-v8a : 只编译 arm64 架构，跳过 x86/armeabi 等
+      # 2. --parallel : 开启并行构建模块
+      # 3. --build-cache : 开启 Gradle 构建缓存
+      # 4. -x lint -x test : 跳过 Lint 检查和单元测试（如果不需要在构建包时运行）
+      run: ./gradlew assembleDevDebug -Pandroid.injected.build.abi.filters=arm64-v8a --parallel --build-cache -x lint -x test
+
+    - name: Upload debug APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: main-dev-debug-arm64.apk
+        # 使用通配符 *.apk 以防文件名因配置改变
+        path: "main/build/outputs/apk/dev/debug/*.apk"

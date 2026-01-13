@@ -1,0 +1,35 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":rebaseStalePrs"
+  ],
+  "baseBranches": [
+    "/^dep\/.*/"
+  ],
+  "ignorePaths": [
+    "deprecated/",
+    "gradle/"
+  ],
+  "assignees": [
+    "firemaples@gmail.com"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "com.android.tools.build:gradle"
+      ],
+      "enabled": false
+    }
+  ],
+  "schedule": [
+    "after 6pm every weekday",
+    "before 8am every weekday",
+    "every weekend"
+  ],
+  "prHourlyLimit": 0,
+  "timezone": "Japan"
+}

@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/pref_category_floating_bar">
+        <SwitchPreference
+            android:defaultValue="true"
+            android:key="pref_restore_main_bar_position"
+            android:title="@string/pref_member_last_main_bar_position" />
+        <!--        <SwitchPreference-->
+        <!--            android:defaultValue="false"-->
+        <!--            android:key="pref_use_simple_style"-->
+        <!--            android:summary="@string/pref_summary_use_simple_style"-->
+        <!--            android:title="@string/pref_title_use_simple_style" />-->
+        <SwitchPreference
+            android:defaultValue="true"
+            android:key="pref_enable_fading_out_while_idle"
+            android:title="@string/pref_title_enable_fade_out_while_idle" />
+        <SeekBarPreference
+            android:defaultValue="5"
+            android:dependency="pref_enable_fading_out_while_idle"
+            android:key="pref_fade_out_after_seconds"
+            android:max="60"
+            android:title="@string/pref_title_fade_out_after_seconds"
+            app:min="1"
+            app:showSeekBarValue="true" />
+        <SeekBarPreference
+            android:defaultValue="20"
+            android:dependency="pref_enable_fading_out_while_idle"
+            android:key="pref_opaque_percentage"
+            android:max="100"
+            android:title="@string/pref_title_opaque_percentage"
+            app:min="10"
+            app:showSeekBarValue="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_screenshot">
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="pref_keep_media_projection_resources"
+            android:summaryOff="@string/pref_summary_off_keep_media_projection_resources"
+            android:summaryOn="@string/pref_summary_on_keep_media_projection_resources"
+            android:title="@string/pref_title_keep_media_projection_resources" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_category_text_recognition">
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="pref_enable_unrecommended_lang_items"
+            android:summary="@string/pref_summary_unrecommended_items_will_show_in_red"
+            android:title="@string/pref_title_enable_unrecommended_lang_items" />
+        <SeekBarPreference
+            android:defaultValue="5"
+            android:key="pref_timeout_for_capturing_screen"
+            android:max="10"
+            android:title="@string/pref_capturing_screen_timeout"
+            app:min="1"
+            app:showSeekBarValue="true" />
+        <ListPreference
+            android:defaultValue="Space"
+            android:entries="@array/textBlockJoinersNames"
+            android:entryValues="@array/textBlockJoinersValues"
+            android:key="pref_text_block_joiner"
+            android:title="@string/pref_joiner_between_text_blocks"
+            app:useSimpleSummaryProvider="true" />
+        <SwitchPreference
+            android:defaultValue="true"
+            android:key="pref_remove_end_dash"
+            android:summary="@string/pref_summary_remove_end_dash"
+            android:title="@string/pref_title_remove_end_dash" />
+        <SwitchPreference
+            android:defaultValue="true"
+            android:key="pref_remove_line_breaks_in_block"
+            android:summary="@string/pref_summary_remove_line_breaks_in_block"
+            android:title="@string/pref_title_remove_line_breaks_in_block" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="pref_remove_spaces_in_cjk"
+            android:summary="@string/pref_summary_remove_spaces_in_cjk"
+            android:title="@string/pref_title_remove_spaces_in_cjk" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_category_translation">
+        <EditTextPreference
+            android:key="pref_mymemory_email"
+            android:summary="@string/pref_summary_mymemory_email"
+            android:title="@string/pref_title_mymemory_email" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_result_panel">
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="pref_auto_copy_ocr_result"
+            android:title="@string/pref_auto_copy_the_recognized_result" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="pref_hide_recognized_result_after_translated"
+            android:title="@string/pref_hide_recognized_result_after_translated" />
+        <SwitchPreference
+            android:defaultValue="true"
+            android:key="pref_limit_result_view_max_width"
+            android:summaryOff="@string/pref_summary_off_limit_result_view_max_width"
+            android:summaryOn="@string/pref_summary_on_limit_result_view_max_width"
+            android:title="@string/pref_limit_result_view_max_width" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_other_settings">
+        <Preference
+            android:key="pref_bypass_battery_optimization"
+            android:summary="@string/pref_summary_bypass_battery_optimization"
+            android:title="@string/pref_bypass_battery_optimization" />
+        <SwitchPreference
+            android:defaultValue="true"
+            android:key="pref_save_last_selection_area"
+            android:title="@string/pref_save_last_selected_area" />
+        <SwitchPreference
+            android:defaultValue="true"
+            android:key="pref_exit_app_while_spen_inserted"
+            android:title="@string/pref_exit_app_while_spen_inserted" />
+    </PreferenceCategory>
+</PreferenceScreen>
