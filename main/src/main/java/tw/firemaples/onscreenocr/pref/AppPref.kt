@@ -35,7 +35,6 @@ object AppPref : KotprefModel() {
 
     var lastSelectionArea: Rect? by gsonNullablePref()
 
-    var lastVersionHistoryShownVersion: String? by nullableStringPref(default = null)
     var lastReadmeShownVersion: String? by nullableStringPref(default = null)
 
     var firebaseRemoteConfigFetchInterval: Long by longPref(default = 43200)

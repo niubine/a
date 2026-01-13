@@ -25,7 +25,6 @@ import tw.firemaples.onscreenocr.floatings.manager.NavState
 import tw.firemaples.onscreenocr.floatings.manager.NavigationAction
 import tw.firemaples.onscreenocr.floatings.manager.StateNavigator
 import tw.firemaples.onscreenocr.pages.setting.SettingManager
-import tw.firemaples.onscreenocr.remoteconfig.RemoteConfigManager
 import tw.firemaples.onscreenocr.translator.TranslationProviderType
 import tw.firemaples.onscreenocr.utils.Logger
 import javax.inject.Inject
@@ -62,8 +61,6 @@ sealed interface MainBarAction {
     data object MoveToEdgeIfEnabled : MainBarAction
     data object OpenLanguageSelectionPanel : MainBarAction
     data object OpenSettings : MainBarAction
-    data class OpenBrowser(val url: String) : MainBarAction
-    data object OpenVersionHistory : MainBarAction
     data object OpenReadme : MainBarAction
     data object HideMainBar : MainBarAction
     data object ExitApp : MainBarAction
@@ -141,6 +138,7 @@ class MainBarViewModelImpl @Inject constructor(
             TranslationProviderType.OtherTranslateApp -> R.drawable.ic_open_in_app
             TranslationProviderType.MicrosoftAzure,
             TranslationProviderType.GoogleMLKit,
+            TranslationProviderType.Deepl,
             TranslationProviderType.MyMemory,
             TranslationProviderType.PapagoTranslateApp,
             TranslationProviderType.YandexTranslateApp,
@@ -157,6 +155,7 @@ class MainBarViewModelImpl @Inject constructor(
             TranslationProviderType.OCROnly -> " $ocrLang "
             TranslationProviderType.MicrosoftAzure,
             TranslationProviderType.GoogleMLKit,
+            TranslationProviderType.Deepl,
             TranslationProviderType.MyMemory -> "$ocrLang>$translationLang"
         }
 
@@ -258,15 +257,6 @@ class MainBarViewModelImpl @Inject constructor(
             when (key) {
                 MainBarMenuConst.MENU_SETTING ->
                     action.emit(MainBarAction.OpenSettings)
-
-                MainBarMenuConst.MENU_PRIVACY_POLICY ->
-                    action.emit(MainBarAction.OpenBrowser(RemoteConfigManager.privacyPolicyUrl))
-
-                MainBarMenuConst.MENU_ABOUT ->
-                    action.emit(MainBarAction.OpenBrowser(RemoteConfigManager.aboutUrl))
-
-                MainBarMenuConst.MENU_VERSION_HISTORY ->
-                    action.emit(MainBarAction.OpenVersionHistory)
 
                 MainBarMenuConst.MENU_README ->
                     action.emit(MainBarAction.OpenReadme)

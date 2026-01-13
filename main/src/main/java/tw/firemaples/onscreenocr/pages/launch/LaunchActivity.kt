@@ -8,7 +8,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import tw.firemaples.onscreenocr.databinding.ActivityLaunchBinding
 import tw.firemaples.onscreenocr.remoteconfig.RemoteConfigManager
-// import tw.firemaples.onscreenocr.utils.AdManager
 import tw.firemaples.onscreenocr.utils.DeviceInfoChecker
 import tw.firemaples.onscreenocr.utils.fitCutoutInsets
 
@@ -38,10 +37,6 @@ class LaunchActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         binding.root.fitCutoutInsets()
-
-        // AdManager.loadBanner(binding.admobAd.root)
-
-//        MoPubAdManager.loadPermissionPageBanner(this, findViewById(R.id.ad_permissionPage))
 
         RemoteConfigManager.tryFetchNew()
 

@@ -28,12 +28,4 @@
         <key>trained_data_files</key>
         <value>{"default":[".traineddata"],"others":{"ara":[".cube.bigrams",".cube.fold",".cube.lm",".cube.nn",".cube.params",".cube.size",".cube.word-freq"],"eng":[".cube.bigrams",".cube.fold",".cube.lm",".cube.nn",".cube.params",".cube.size",".cube.word-freq",".tesseract_cube.nn"],"fra":[".cube.bigrams",".cube.fold",".cube.lm",".cube.nn",".cube.params",".cube.size",".cube.word-freq",".tesseract_cube.nn"],"hin":[".cube.bigrams",".cube.fold",".cube.lm",".cube.nn",".cube.params",".cube.word-freq",".tesseract_cube.nn"],"ita":[".cube.bigrams",".cube.fold",".cube.lm",".cube.nn",".cube.params",".cube.size",".cube.word-freq",".tesseract_cube.nn"],"rus":[".cube.fold",".cube.lm",".cube.nn",".cube.params",".cube.size",".cube.word-freq"],"spa":[".cube.bigrams",".cube.fold",".cube.lm",".cube.nn",".cube.params",".cube.size",".cube.word-freq"]}}</value>
     </entry>
-    <entry>
-        <key>privacy_policy_url</key>
-        <value>https://sites.google.com/view/privacy-policy-evertranslator</value>
-    </entry>
-    <entry>
-        <key>about_url</key>
-        <value>https://github.com/firemaples/EverTranslator</value>
-    </entry>
 </defaultsMap>

@@ -50,9 +50,6 @@ private const val EVENT_SHOW_3RD_PARTY_TRANSLATOR = "show_3rd_party_translator"
 private const val EVENT_SHOW_3RD_PARTY_TRANSLATOR_FAILED =
     "show_3rd_party_translator_failed"
 
-private const val EVENT_AD_SHOW_SUCCESS = "admob_show_success"
-private const val EVENT_AD_SHOW_FAILED = "admob_show_failed"
-
 object FirebaseEvent {
     private val context by lazy { Utils.context }
     private val firebaseAnalytics by lazy { FirebaseAnalytics.getInstance(context) }
@@ -271,23 +268,6 @@ object FirebaseEvent {
         }
 
         logEvent(EVENT_SHOW_3RD_PARTY_TRANSLATOR_FAILED, params)
-    }
-
-    fun logEventAdShowSuccess(unitId: String) {
-        val params = Bundle().apply {
-            putString("unit_id", unitId)
-        }
-
-        logEvent(EVENT_AD_SHOW_SUCCESS, params)
-    }
-
-    fun loadEventAdShowFailed(unitId: String, errorCode: String) {
-        val params = Bundle().apply {
-            putString("unit_id", unitId)
-            putString("error_code", errorCode)
-        }
-
-        logEvent(EVENT_AD_SHOW_FAILED, params)
     }
 
     private fun logEvent(key: String, params: Bundle? = null) {
