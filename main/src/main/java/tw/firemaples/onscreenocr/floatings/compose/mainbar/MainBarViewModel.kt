@@ -141,6 +141,7 @@ class MainBarViewModelImpl @Inject constructor(
             TranslationProviderType.OtherTranslateApp -> R.drawable.ic_open_in_app
             TranslationProviderType.MicrosoftAzure,
             TranslationProviderType.GoogleMLKit,
+            TranslationProviderType.Deepl,
             TranslationProviderType.MyMemory,
             TranslationProviderType.PapagoTranslateApp,
             TranslationProviderType.YandexTranslateApp,
@@ -157,6 +158,7 @@ class MainBarViewModelImpl @Inject constructor(
             TranslationProviderType.OCROnly -> " $ocrLang "
             TranslationProviderType.MicrosoftAzure,
             TranslationProviderType.GoogleMLKit,
+            TranslationProviderType.Deepl,
             TranslationProviderType.MyMemory -> "$ocrLang>$translationLang"
         }
 

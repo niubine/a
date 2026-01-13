@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="deepl_translationLangName">
+        <item>中文</item>
+        <item>簡體中文</item>
+        <item>繁體中文</item>
+        <item>英語</item>
+        <item>英語（美國）</item>
+        <item>英語（英國）</item>
+        <item>葡萄牙語</item>
+        <item>葡萄牙語（巴西）</item>
+        <item>日語</item>
+        <item>韓語</item>
+        <item>法語</item>
+        <item>德語</item>
+        <item>西班牙語</item>
+        <item>俄語</item>
+        <item>義大利語</item>
+        <item>荷蘭語</item>
+        <item>波蘭語</item>
+        <item>阿拉伯語</item>
+        <item>土耳其語</item>
+    </string-array>
+</resources>

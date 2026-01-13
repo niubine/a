@@ -8,6 +8,7 @@
 
     <string name="translation_provider_microsoft_azure">微软 Azure</string>
     <string name="translation_provider_google_ml_kit">Google MLKit</string>
+    <string name="translation_provider_deepl">DeepL</string>
     <string name="translation_provider_google_translate_app">Google 翻译 App</string>
     <string name="translation_provider_none">仅辨识文字</string>
     <string name="ocr_provider_google_ml_kit">Google MLKit (推荐)</string>

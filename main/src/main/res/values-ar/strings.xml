@@ -6,6 +6,7 @@
 
     <string name="translation_provider_microsoft_azure">"مايكروسوفت Azure "</string>
     <string name="translation_provider_google_ml_kit">Google MLKit</string>
+    <string name="translation_provider_deepl">DeepL</string>
     <string name="translation_provider_google_translate_app">تطبيق ترجمة Google</string><![CDATA[>
     ]]>
     <string name="translation_provider_none">التعرف على النص فقط</string>
