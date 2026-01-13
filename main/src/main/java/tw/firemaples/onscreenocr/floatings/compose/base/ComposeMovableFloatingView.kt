@@ -72,7 +72,9 @@ abstract class ComposeMovableFloatingView(context: Context) : ComposeFloatingVie
 
     private fun moveToEdgeOrFadeOut() {
         when {
-            moveToEdgeAfterMoved -> moveToEdge()
+            moveToEdgeAfterMoved -> {
+                rootView.postDelayed({ moveToEdge() }, 5000L)
+            }
             fadeOutAfterMoved -> fadeOut()
             else -> cancelFadeOut()
         }
@@ -80,7 +82,7 @@ abstract class ComposeMovableFloatingView(context: Context) : ComposeFloatingVie
 
     //region Moving to edge
     fun moveToEdgeIfEnabled() {
-        rootView.postDelayed({ if (moveToEdgeAfterMoved) moveToEdge() }, 100L)
+        rootView.postDelayed({ if (moveToEdgeAfterMoved) moveToEdge() }, 5000L)
     }
 
     private fun moveToEdge() {

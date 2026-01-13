@@ -10,13 +10,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -32,12 +32,12 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -62,55 +62,62 @@ fun MainBarContent(
         modifier = Modifier
             .alpha(if (state.drawMainBar) 1f else 0f)
     ) {
-        if (isLandscape) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                if (state.toolbarVisible) {
-                    FloatingToolbar(
-                        state = state,
-                        isLandscape = true,
-                        onRegionCaptureClicked = viewModel::onRegionCaptureClicked,
-                        onFullScreenCaptureClicked = viewModel::onFullScreenCaptureClicked,
-                        onFullScreenTranslateClicked = viewModel::onFullScreenTranslateClicked,
-                        onSettingsClicked = viewModel::onSettingsClicked,
-                        onCancelClicked = viewModel::onCancelClicked,
-                        onLanguageBlockClicked = viewModel::onLanguageBlockClicked,
+        BoxWithConstraints {
+            val maxToolbarWidth = maxWidth - FloatingBallSize - 12.dp
+            val forceColumnLayout = isLandscape && maxToolbarWidth < 180.dp
+
+            if (isLandscape && !forceColumnLayout) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (state.toolbarVisible) {
+                        FloatingToolbar(
+                            state = state,
+                            isLandscape = true,
+                            maxWidth = maxToolbarWidth,
+                            onRegionCaptureClicked = viewModel::onRegionCaptureClicked,
+                            onFullScreenCaptureClicked = viewModel::onFullScreenCaptureClicked,
+                            onFullScreenTranslateClicked = viewModel::onFullScreenTranslateClicked,
+                            onSettingsClicked = viewModel::onSettingsClicked,
+                            onCancelClicked = viewModel::onCancelClicked,
+                            onLanguageBlockClicked = viewModel::onLanguageBlockClicked,
+                        )
+                    }
+                    FloatingBall(
+                        onClick = viewModel::onFloatingBallClicked,
+                        onDragStart = onDragStart,
+                        onDragEnd = onDragEnd,
+                        onDragCancel = onDragCancel,
+                        onDrag = onDrag,
                     )
                 }
-                FloatingBall(
-                    onClick = viewModel::onFloatingBallClicked,
-                    onDragStart = onDragStart,
-                    onDragEnd = onDragEnd,
-                    onDragCancel = onDragCancel,
-                    onDrag = onDrag,
-                )
-            }
-        } else {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                if (state.toolbarVisible) {
-                    FloatingToolbar(
-                        state = state,
-                        isLandscape = false,
-                        onRegionCaptureClicked = viewModel::onRegionCaptureClicked,
-                        onFullScreenCaptureClicked = viewModel::onFullScreenCaptureClicked,
-                        onFullScreenTranslateClicked = viewModel::onFullScreenTranslateClicked,
-                        onSettingsClicked = viewModel::onSettingsClicked,
-                        onCancelClicked = viewModel::onCancelClicked,
-                        onLanguageBlockClicked = viewModel::onLanguageBlockClicked,
+            } else {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (state.toolbarVisible) {
+                        FloatingToolbar(
+                            state = state,
+                            isLandscape = false,
+                            maxWidth = maxWidth - 12.dp,
+                            onRegionCaptureClicked = viewModel::onRegionCaptureClicked,
+                            onFullScreenCaptureClicked = viewModel::onFullScreenCaptureClicked,
+                            onFullScreenTranslateClicked = viewModel::onFullScreenTranslateClicked,
+                            onSettingsClicked = viewModel::onSettingsClicked,
+                            onCancelClicked = viewModel::onCancelClicked,
+                            onLanguageBlockClicked = viewModel::onLanguageBlockClicked,
+                        )
+                    }
+                    FloatingBall(
+                        onClick = viewModel::onFloatingBallClicked,
+                        onDragStart = onDragStart,
+                        onDragEnd = onDragEnd,
+                        onDragCancel = onDragCancel,
+                        onDrag = onDrag,
                     )
                 }
-                FloatingBall(
-                    onClick = viewModel::onFloatingBallClicked,
-                    onDragStart = onDragStart,
-                    onDragEnd = onDragEnd,
-                    onDragCancel = onDragCancel,
-                    onDrag = onDrag,
-                )
             }
         }
     }
@@ -120,6 +127,7 @@ fun MainBarContent(
 private fun FloatingToolbar(
     state: MainBarState,
     isLandscape: Boolean,
+    maxWidth: Dp,
     onRegionCaptureClicked: () -> Unit,
     onFullScreenCaptureClicked: () -> Unit,
     onFullScreenTranslateClicked: () -> Unit,
@@ -133,41 +141,30 @@ private fun FloatingToolbar(
             translatorIcon = state.translatorIcon,
             onClick = onLanguageBlockClicked,
         )
-        Spacer(modifier = Modifier.size(6.dp))
+        Spacer(modifier = Modifier.size(4.dp))
         ToolbarButton(
             icon = R.drawable.ic_selection,
-            text = stringResource(
-                id = if (state.canStartRegionCapture) {
-                    R.string.toolbar_confirm_area_capture
-                } else {
-                    R.string.toolbar_region_capture
-                }
-            ),
             enabled = state.isIdle || state.canStartRegionCapture,
             onClick = onRegionCaptureClicked,
         )
         ToolbarButton(
             icon = R.drawable.ic_text_search,
-            text = stringResource(id = R.string.toolbar_fullscreen_capture),
             enabled = state.isIdle,
             onClick = onFullScreenCaptureClicked,
         )
         ToolbarButton(
             icon = R.drawable.ic_translate,
-            text = stringResource(id = R.string.toolbar_fullscreen_translate),
             enabled = state.isIdle,
             onClick = onFullScreenTranslateClicked,
         )
         ToolbarButton(
             icon = R.drawable.ic_settings,
-            text = stringResource(id = R.string.toolbar_settings),
             enabled = true,
             onClick = onSettingsClicked,
         )
         if (state.showCancelButton) {
             ToolbarButton(
                 icon = R.drawable.ic_close,
-                text = stringResource(id = R.string.toolbar_cancel),
                 enabled = true,
                 onClick = onCancelClicked,
             )
@@ -175,11 +172,12 @@ private fun FloatingToolbar(
     }
 
     val containerModifier = Modifier
+        .widthIn(max = maxWidth)
         .background(
             color = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(12.dp),
         )
-        .padding(8.dp)
+        .padding(6.dp)
 
     if (isLandscape) {
         Row(
@@ -237,33 +235,26 @@ private fun LanguageBlock(
 @Composable
 private fun ToolbarButton(
     @DrawableRes icon: Int,
-    text: String,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    Column(
+    Box(
         modifier = Modifier
-            .width(64.dp)
+            .size(36.dp)
             .alpha(if (enabled) 1f else 0.4f)
             .clickable(enabled = enabled, onClick = onClick)
             .background(
                 color = MaterialTheme.colorScheme.primary,
                 shape = RoundedCornerShape(8.dp),
             )
-            .padding(vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(6.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Image(
             modifier = Modifier.size(20.dp),
             painter = painterResource(id = icon),
             contentDescription = "",
             colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onPrimary),
-        )
-        Text(
-            text = text,
-            fontSize = 10.sp,
-            color = MaterialTheme.colorScheme.onPrimary,
         )
     }
 }
@@ -278,7 +269,7 @@ private fun FloatingBall(
 ) {
     Box(
         modifier = Modifier
-            .size(48.dp)
+            .size(FloatingBallSize)
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragStart = onDragStart,
@@ -302,6 +293,8 @@ private fun FloatingBall(
         )
     }
 }
+
+private val FloatingBallSize = 48.dp
 
 private class MainBarStateProvider : PreviewParameterProvider<MainBarState> {
     override val values: Sequence<MainBarState>

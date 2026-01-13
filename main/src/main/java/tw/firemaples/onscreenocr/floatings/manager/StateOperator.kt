@@ -459,60 +459,56 @@ class StateOperatorImpl @Inject constructor(
                 translator = translator,
             )
 
-            val textBlocks = recognitionResult.textBlocks.ifEmpty {
-                listOf(
-                    RecognizedTextBlock(
-                        text = recognitionResult.result,
-                        boundingBox = screenRect,
-                    )
-                )
-            }
-
-            val translatedBlocks = mutableListOf<OverlayTextBlock>()
-            for (block in textBlocks) {
-                if (block.text.isBlank()) continue
-                when (val translationResult = translator.translate(
-                    text = block.text,
-                    sourceLangCode = recognitionResult.langCode,
-                )) {
-                    is TranslationResult.TranslatedResult -> translatedBlocks.add(
-                        OverlayTextBlock(
-                            text = translationResult.result,
-                            boundingBox = block.boundingBox,
+            val textBlocks = recognitionResult.textBlocks
+                .filter { it.text.isNotBlank() }
+                .ifEmpty {
+                    listOf(
+                        RecognizedTextBlock(
+                            text = recognitionResult.result,
+                            boundingBox = screenRect,
                         )
                     )
+                }
 
-                    is TranslationResult.SourceLangNotSupport -> {
-                        FirebaseEvent.logTranslationSourceLangNotSupport(
-                            translator, recognitionResult.langCode,
+            val delimiter = "␟"
+            val mergedText = textBlocks.joinToString(separator = delimiter) { it.text }
+
+            val translatedText = when (val translationResult = translator.translate(
+                text = mergedText,
+                sourceLangCode = recognitionResult.langCode,
+            )) {
+                is TranslationResult.TranslatedResult -> translationResult.result
+
+                is TranslationResult.SourceLangNotSupport -> {
+                    FirebaseEvent.logTranslationSourceLangNotSupport(
+                        translator, recognitionResult.langCode,
+                    )
+                    showError(context.getString(R.string.msg_translator_provider_does_not_support_the_ocr_lang))
+                    return@launch
+                }
+
+                is TranslationResult.TranslationFailed -> {
+                    FirebaseEvent.logTranslationTextFailed(translator)
+                    val error = translationResult.error
+                    if (error is MicrosoftAzureTranslator.Error) {
+                        FirebaseEvent.logMicrosoftTranslationError(error)
+                    }
+                    if (error is IOException) {
+                        showError(context.getString(R.string.error_can_not_connect_to_translation_server))
+                    } else {
+                        FirebaseEvent.logException(error)
+                        showError(
+                            error.localizedMessage
+                                ?: context.getString(R.string.error_unknown)
                         )
-                        showError(context.getString(R.string.msg_translator_provider_does_not_support_the_ocr_lang))
-                        return@launch
                     }
+                    return@launch
+                }
 
-                    is TranslationResult.TranslationFailed -> {
-                        FirebaseEvent.logTranslationTextFailed(translator)
-                        val error = translationResult.error
-                        if (error is MicrosoftAzureTranslator.Error) {
-                            FirebaseEvent.logMicrosoftTranslationError(error)
-                        }
-                        if (error is IOException) {
-                            showError(context.getString(R.string.error_can_not_connect_to_translation_server))
-                        } else {
-                            FirebaseEvent.logException(error)
-                            showError(
-                                error.localizedMessage
-                                    ?: context.getString(R.string.error_unknown)
-                            )
-                        }
-                        return@launch
-                    }
-
-                    TranslationResult.OCROnlyResult,
-                    TranslationResult.OuterTranslatorLaunched -> {
-                        showError(context.getString(R.string.error_full_screen_translation_not_supported))
-                        return@launch
-                    }
+                TranslationResult.OCROnlyResult,
+                TranslationResult.OuterTranslatorLaunched -> {
+                    showError(context.getString(R.string.error_full_screen_translation_not_supported))
+                    return@launch
                 }
             }
 
@@ -522,6 +518,13 @@ class StateOperatorImpl @Inject constructor(
                     boundingBox = block.boundingBox,
                 )
             }
+
+            val translatedBlocks = buildTranslatedBlocks(
+                translatedText = translatedText,
+                originalBlocks = originalBlocks,
+                fallbackRect = screenRect,
+                delimiter = delimiter,
+            )
 
             FirebaseEvent.logTranslationTextFinished(translator)
 
@@ -542,6 +545,33 @@ class StateOperatorImpl @Inject constructor(
             logger.warn(t = e)
             FirebaseEvent.logException(e)
             showError(e.message ?: "Unknown error found while translating")
+        }
+    }
+
+    private fun buildTranslatedBlocks(
+        translatedText: String,
+        originalBlocks: List<OverlayTextBlock>,
+        fallbackRect: Rect,
+        delimiter: String,
+    ): List<OverlayTextBlock> {
+        val pieces = translatedText.split(delimiter)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+
+        return if (pieces.size == originalBlocks.size) {
+            originalBlocks.mapIndexed { index, block ->
+                OverlayTextBlock(
+                    text = pieces[index],
+                    boundingBox = block.boundingBox,
+                )
+            }
+        } else {
+            listOf(
+                OverlayTextBlock(
+                    text = translatedText.trim(),
+                    boundingBox = fallbackRect,
+                )
+            )
         }
     }
 
