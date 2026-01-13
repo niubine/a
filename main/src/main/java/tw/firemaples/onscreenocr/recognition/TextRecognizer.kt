@@ -111,5 +111,11 @@ data class RecognitionLanguage(
 data class RecognitionResult(
     val langCode: String,
     val result: String,
-    val boundingBoxes: List<Rect>
+    val boundingBoxes: List<Rect>,
+    val textBlocks: List<RecognizedTextBlock> = emptyList(),
+)
+
+data class RecognizedTextBlock(
+    val text: String,
+    val boundingBox: Rect,
 )

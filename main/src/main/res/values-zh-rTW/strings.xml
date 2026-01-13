@@ -37,6 +37,12 @@
     <string name="menu_readme">使用說明</string>
     <string name="menu_hide">隱藏</string>
     <string name="menu_exit">離開</string>
+    <string name="toolbar_region_capture">區域截圖</string>
+    <string name="toolbar_confirm_area_capture">確認區域</string>
+    <string name="toolbar_fullscreen_capture">全螢幕截圖</string>
+    <string name="toolbar_fullscreen_translate">全螢幕翻譯</string>
+    <string name="toolbar_settings">設定</string>
+    <string name="toolbar_cancel">取消</string>
 
     <string name="text_ocr_language">辨識語言</string>
     <string name="text_translation">翻譯</string>
@@ -62,6 +68,8 @@
     <string name="msg_create_selection_area">在此拖曳以建立選取區</string>
     <string name="msg_image_reader_format_unmatched">發現暫時性錯誤，請再試一次(1) (Image reader format)</string>
     <string name="msg_translator_provider_does_not_support_the_ocr_lang">此翻譯引擎不支援選擇的辨識語言</string>
+    <string name="error_full_screen_translation_not_supported">目前翻譯引擎不支援全螢幕翻譯。</string>
+    <string name="full_screen_translation_hint">按住顯示原文，鬆開回到譯文，上滑關閉。</string>
 
     <string name="msg_grant_posting_notification_permission_rationale">授予通知權限以快速顯示/隱藏浮動視窗</string>
     <string name="btn_request_again">重新請求</string>

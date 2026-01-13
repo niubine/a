@@ -2,6 +2,7 @@ package tw.firemaples.onscreenocr.recognition
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Rect
 import com.googlecode.tesseract.android.TessBaseAPI
 import tw.firemaples.onscreenocr.R
 import tw.firemaples.onscreenocr.utils.Logger
@@ -75,12 +76,42 @@ class TesseractTextRecognizer : TextRecognizer {
         tess.setImage(bitmap)
         val resultText = tess.utF8Text
         val boxes = tess.regions.boxRects
+        val lines = resultText
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toList()
+        val textBlocks = buildTextBlocks(lines, boxes, resultText)
         tess.recycle()
 
-        return RecognitionResult(lang.code, resultText, boxes)
+        return RecognitionResult(lang.code, resultText, boxes, textBlocks)
     }
 
     override suspend fun parseToDisplayLangCode(langCode: String): String {
         return langCode
+    }
+
+    private fun buildTextBlocks(
+        lines: List<String>,
+        boxes: List<Rect>,
+        fallbackText: String,
+    ): List<RecognizedTextBlock> {
+        val limitedCount = minOf(lines.size, boxes.size)
+        if (limitedCount == 0) {
+            val fallbackBox = boxes.firstOrNull() ?: return emptyList()
+            if (fallbackText.isBlank()) return emptyList()
+            return listOf(
+                RecognizedTextBlock(
+                    text = fallbackText.trim(),
+                    boundingBox = fallbackBox,
+                )
+            )
+        }
+        return (0 until limitedCount).map { index ->
+            RecognizedTextBlock(
+                text = lines[index],
+                boundingBox = boxes[index],
+            )
+        }
     }
 }

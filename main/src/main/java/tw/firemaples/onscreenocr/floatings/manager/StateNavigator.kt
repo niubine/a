@@ -37,7 +37,8 @@ class StateNavigatorImpl @Inject constructor() : StateNavigator {
 
     private val nextStates: Map<KClass<out NavState>, Set<KClass<out NavState>>> = mapOf(
         NavState.Idle::class to setOf(
-            NavState.Idle::class, NavState.ScreenCircling::class,
+            NavState.Idle::class, NavState.ScreenCircling::class, NavState.ScreenCircled::class,
+            NavState.FullScreenCapturing::class,
         ),
         NavState.ScreenCircling::class to setOf(
             NavState.Idle::class, NavState.ScreenCircled::class,
@@ -56,6 +57,18 @@ class StateNavigatorImpl @Inject constructor() : StateNavigator {
         ),
         NavState.TextTranslated::class to setOf(
             NavState.Idle::class, NavState.TextTranslating::class,
+        ),
+        NavState.FullScreenCapturing::class to setOf(
+            NavState.Idle::class, NavState.FullScreenTextRecognizing::class,
+        ),
+        NavState.FullScreenTextRecognizing::class to setOf(
+            NavState.Idle::class, NavState.FullScreenTextTranslating::class,
+        ),
+        NavState.FullScreenTextTranslating::class to setOf(
+            NavState.FullScreenTextTranslated::class, NavState.Idle::class,
+        ),
+        NavState.FullScreenTextTranslated::class to setOf(
+            NavState.Idle::class,
         ),
     )
 
@@ -97,6 +110,16 @@ sealed interface NavigationAction {
     data object CancelScreenCircling : NavigationAction
 
     data class NavigateToScreenCapturing(
+        val ocrLang: String,
+        val ocrProvider: TextRecognitionProviderType,
+    ) : NavigationAction
+
+    data class NavigateToFullScreenCapturing(
+        val ocrLang: String,
+        val ocrProvider: TextRecognitionProviderType,
+    ) : NavigationAction
+
+    data class NavigateToFullScreenTranslation(
         val ocrLang: String,
         val ocrProvider: TextRecognitionProviderType,
     ) : NavigationAction
@@ -172,6 +195,39 @@ sealed class NavState {
         val croppedBitmap: Bitmap,
         val recognitionResult: RecognitionResult,
         val resultInfo: ResultInfo,
+    ) : NavState(), BitmapIncluded {
+        override val bitmap: Bitmap
+            get() = croppedBitmap
+    }
+
+    object FullScreenCapturing : NavState()
+
+    data class FullScreenTextRecognizing(
+        override val parentRect: Rect,
+        override val selectedRect: Rect,
+        val croppedBitmap: Bitmap,
+    ) : NavState(), BitmapIncluded {
+        override val bitmap: Bitmap
+            get() = croppedBitmap
+    }
+
+    data class FullScreenTextTranslating(
+        override val parentRect: Rect,
+        override val selectedRect: Rect,
+        val croppedBitmap: Bitmap,
+        val recognitionResult: RecognitionResult,
+        val translationProviderType: TranslationProviderType,
+    ) : NavState(), BitmapIncluded {
+        override val bitmap: Bitmap
+            get() = croppedBitmap
+    }
+
+    data class FullScreenTextTranslated(
+        override val parentRect: Rect,
+        override val selectedRect: Rect,
+        val croppedBitmap: Bitmap,
+        val recognitionResult: RecognitionResult,
+        val result: FullScreenTranslationResult,
     ) : NavState(), BitmapIncluded {
         override val bitmap: Bitmap
             get() = croppedBitmap

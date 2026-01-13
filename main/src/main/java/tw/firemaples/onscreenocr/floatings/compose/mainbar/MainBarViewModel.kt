@@ -26,7 +26,7 @@ import tw.firemaples.onscreenocr.floatings.manager.NavigationAction
 import tw.firemaples.onscreenocr.floatings.manager.StateNavigator
 import tw.firemaples.onscreenocr.pages.setting.SettingManager
 import tw.firemaples.onscreenocr.translator.TranslationProviderType
-import tw.firemaples.onscreenocr.utils.Logger
+import tw.firemaples.onscreenocr.utils.UIUtils
 import javax.inject.Inject
 
 interface MainBarViewModel {
@@ -36,24 +36,26 @@ interface MainBarViewModel {
     fun getFadeOutAfterMoved(): Boolean
     fun getFadeOutDelay(): Long
     fun getFadeOutDestinationAlpha(): Float
-    fun onSelectClicked()
-    fun onTranslateClicked()
-    fun onCloseClicked()
-    fun onMenuButtonClicked()
+    fun onFloatingBallClicked()
+    fun onRegionCaptureClicked()
+    fun onFullScreenCaptureClicked()
+    fun onFullScreenTranslateClicked()
+    fun onSettingsClicked()
+    fun onCancelClicked()
     fun onAttachedToScreen()
     fun onDragEnd(x: Int, y: Int)
     fun onLanguageBlockClicked()
-    fun onMenuItemClicked(key: String?)
 }
 
 data class MainBarState(
     val drawMainBar: Boolean = true,
+    val toolbarVisible: Boolean = false,
+    val isIdle: Boolean = true,
+    val canStartRegionCapture: Boolean = false,
+    val showCancelButton: Boolean = false,
+    val isDockedRight: Boolean = false,
     val langText: String = "",
     val translatorIcon: Int? = null,
-    val displaySelectButton: Boolean = false,
-    val displayTranslateButton: Boolean = false,
-    val displayCloseButton: Boolean = false,
-    val displayMainBarMenu: Boolean = false,
 )
 
 sealed interface MainBarAction {
@@ -61,11 +63,8 @@ sealed interface MainBarAction {
     data object MoveToEdgeIfEnabled : MainBarAction
     data object OpenLanguageSelectionPanel : MainBarAction
     data object OpenSettings : MainBarAction
-    data object OpenReadme : MainBarAction
     data object HideMainBar : MainBarAction
     data object ExitApp : MainBarAction
-    data object ShowMenu : MainBarAction
-    data object HideMenu : MainBarAction
 }
 
 @Suppress("LongParameterList", "TooManyFunctions")
@@ -83,9 +82,10 @@ class MainBarViewModelImpl @Inject constructor(
     override val state = MutableStateFlow(MainBarState())
     override val action = MutableSharedFlow<MainBarAction>()
 
-    private val logger: Logger by lazy { Logger(this::class) }
-
     init {
+        updateDockedSide(
+            x = getMainBarInitialPositionUseCase.invoke().x
+        )
         stateNavigator.currentNavState
             .onEach { onNavigationStateChanges(it) }
             .launchIn(scope)
@@ -102,12 +102,16 @@ class MainBarViewModelImpl @Inject constructor(
                 else -> false
             }
 
+            val canStartRegionCapture = navState is NavState.ScreenCircled
+            val showCancelButton =
+                navState == NavState.ScreenCircling || navState is NavState.ScreenCircled
+
             it.copy(
                 drawMainBar = drawMainBar,
-                displaySelectButton = navState == NavState.Idle,
-                displayTranslateButton = navState is NavState.ScreenCircled,
-                displayCloseButton =
-                navState == NavState.ScreenCircling || navState is NavState.ScreenCircled,
+                toolbarVisible = if (drawMainBar) it.toolbarVisible else false,
+                isIdle = navState == NavState.Idle,
+                canStartRegionCapture = canStartRegionCapture,
+                showCancelButton = showCancelButton,
             )
         }
         action.emit(MainBarAction.MoveToEdgeIfEnabled)
@@ -175,7 +179,7 @@ class MainBarViewModelImpl @Inject constructor(
         val navState = stateNavigator.currentNavState.value
 
         return navState != NavState.ScreenCircling && navState !is NavState.ScreenCircled
-                && !state.value.displayMainBarMenu
+                && !state.value.toolbarVisible
                 && SettingManager.enableFadingOutWhileIdle //TODO move logic
     }
 
@@ -185,41 +189,98 @@ class MainBarViewModelImpl @Inject constructor(
     override fun getFadeOutDestinationAlpha(): Float =
         SettingManager.opaquePercentageToFadeOut //TODO move logic
 
-    override fun onSelectClicked() {
+    override fun onFloatingBallClicked() {
         scope.launch {
             action.emit(MainBarAction.RescheduleFadeOut)
-            stateNavigator.navigate(NavigationAction.NavigateToScreenCircling)
+            state.update {
+                it.copy(
+                    toolbarVisible = !it.toolbarVisible,
+                )
+            }
         }
     }
 
-    override fun onTranslateClicked() {
+    override fun onRegionCaptureClicked() {
         scope.launch {
             action.emit(MainBarAction.RescheduleFadeOut)
+            when {
+                state.value.canStartRegionCapture -> {
+                    val (ocrProvider, ocrLang) = getCurrentOCRLangUseCase.invoke().first()
+                    stateNavigator.navigate(
+                        NavigationAction.NavigateToScreenCapturing(
+                            ocrLang = ocrLang,
+                            ocrProvider = ocrProvider,
+                        )
+                    )
+                    state.update {
+                        it.copy(toolbarVisible = false)
+                    }
+                }
+
+                state.value.isIdle -> {
+                    stateNavigator.navigate(NavigationAction.NavigateToScreenCircling)
+                    state.update {
+                        it.copy(toolbarVisible = false)
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onFullScreenCaptureClicked() {
+        scope.launch {
+            action.emit(MainBarAction.RescheduleFadeOut)
+            if (!state.value.isIdle) return@launch
+
             val (ocrProvider, ocrLang) = getCurrentOCRLangUseCase.invoke().first()
             stateNavigator.navigate(
-                NavigationAction.NavigateToScreenCapturing(
+                NavigationAction.NavigateToFullScreenCapturing(
                     ocrLang = ocrLang,
                     ocrProvider = ocrProvider,
                 )
             )
+            state.update {
+                it.copy(toolbarVisible = false)
+            }
         }
     }
 
-    override fun onCloseClicked() {
+    override fun onFullScreenTranslateClicked() {
+        scope.launch {
+            action.emit(MainBarAction.RescheduleFadeOut)
+            if (!state.value.isIdle) return@launch
+
+            val (ocrProvider, ocrLang) = getCurrentOCRLangUseCase.invoke().first()
+            stateNavigator.navigate(
+                NavigationAction.NavigateToFullScreenTranslation(
+                    ocrLang = ocrLang,
+                    ocrProvider = ocrProvider,
+                )
+            )
+            state.update {
+                it.copy(
+                    toolbarVisible = false,
+                )
+            }
+        }
+    }
+
+    override fun onSettingsClicked() {
+        scope.launch {
+            action.emit(MainBarAction.RescheduleFadeOut)
+            action.emit(MainBarAction.OpenSettings)
+            state.update {
+                it.copy(toolbarVisible = false)
+            }
+        }
+    }
+
+    override fun onCancelClicked() {
         scope.launch {
             action.emit(MainBarAction.RescheduleFadeOut)
             stateNavigator.navigate(NavigationAction.CancelScreenCircling)
-        }
-    }
-
-    override fun onMenuButtonClicked() {
-        scope.launch {
-            action.emit(MainBarAction.RescheduleFadeOut)
-            action.emit(MainBarAction.ShowMenu)
             state.update {
-                it.copy(
-                    displayMainBarMenu = true,
-                )
+                it.copy(toolbarVisible = false)
             }
         }
     }
@@ -234,38 +295,23 @@ class MainBarViewModelImpl @Inject constructor(
     override fun onDragEnd(x: Int, y: Int) {
         scope.launch {
             saveLastMainBarPositionUseCase.invoke(x = x, y = y)
+            updateDockedSide(x)
+        }
+    }
+
+    private fun updateDockedSide(x: Int) {
+        val isRight = x > (UIUtils.screenSize[0] / 2)
+        state.update {
+            it.copy(isDockedRight = isRight)
         }
     }
 
     override fun onLanguageBlockClicked() {
         scope.launch {
-            action.emit(MainBarAction.OpenLanguageSelectionPanel)
-        }
-    }
-
-    override fun onMenuItemClicked(key: String?) {
-        scope.launch {
-            state.update {
-                it.copy(
-                    displayMainBarMenu = false,
-                )
-            }
-
-            action.emit(MainBarAction.HideMenu)
             action.emit(MainBarAction.RescheduleFadeOut)
-
-            when (key) {
-                MainBarMenuConst.MENU_SETTING ->
-                    action.emit(MainBarAction.OpenSettings)
-
-                MainBarMenuConst.MENU_README ->
-                    action.emit(MainBarAction.OpenReadme)
-
-                MainBarMenuConst.MENU_HIDE ->
-                    action.emit(MainBarAction.HideMainBar)
-
-                MainBarMenuConst.MENU_EXIT ->
-                    action.emit(MainBarAction.ExitApp)
+            action.emit(MainBarAction.OpenLanguageSelectionPanel)
+            state.update {
+                it.copy(toolbarVisible = false)
             }
         }
     }
