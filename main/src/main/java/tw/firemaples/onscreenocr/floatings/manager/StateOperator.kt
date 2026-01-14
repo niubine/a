@@ -667,8 +667,13 @@ class StateOperatorImpl @Inject constructor(
         }
 
         val combined = filteredAcc + dedupedOcr
-        val merged = mergeBlocksByLine(combined, dpToPx(MERGE_LINE_GAP_DP))
-        return merged.sortedWith(
+        val mergedLines = mergeBlocksByLine(combined, dpToPx(MERGE_LINE_GAP_DP))
+        val mergedParagraphs = mergeBlocksByParagraph(
+            mergedLines,
+            maxGapPx = dpToPx(MERGE_PARAGRAPH_GAP_DP),
+            alignThresholdPx = dpToPx(MERGE_PARAGRAPH_ALIGN_DP),
+        )
+        return mergedParagraphs.sortedWith(
             compareBy<OverlayTextBlock> { it.boundingBox.top }
                 .thenBy { it.boundingBox.left }
         )
@@ -725,6 +730,61 @@ class StateOperatorImpl @Inject constructor(
 
         result.add(current)
         return result
+    }
+
+    private fun mergeBlocksByParagraph(
+        blocks: List<OverlayTextBlock>,
+        maxGapPx: Int,
+        alignThresholdPx: Int,
+    ): List<OverlayTextBlock> {
+        if (blocks.isEmpty()) {
+            return emptyList()
+        }
+
+        val sorted = blocks.sortedWith(
+            compareBy<OverlayTextBlock> { it.boundingBox.top }
+                .thenBy { it.boundingBox.left }
+        )
+        val result = mutableListOf<OverlayTextBlock>()
+        var current = sorted.first()
+
+        for (next in sorted.drop(1)) {
+            if (shouldMergeVertically(current.boundingBox, next.boundingBox, maxGapPx, alignThresholdPx)) {
+                val mergedText = listOf(current.text, next.text)
+                    .filter { it.isNotBlank() }
+                    .joinToString("\n")
+                val mergedRect = Rect(current.boundingBox)
+                mergedRect.union(next.boundingBox)
+                current = OverlayTextBlock(text = mergedText, boundingBox = mergedRect)
+            } else {
+                result.add(current)
+                current = next
+            }
+        }
+
+        result.add(current)
+        return result
+    }
+
+    private fun shouldMergeVertically(
+        a: Rect,
+        b: Rect,
+        maxGapPx: Int,
+        alignThresholdPx: Int,
+    ): Boolean {
+        if (b.top < a.top) {
+            return false
+        }
+        val gap = b.top - a.bottom
+        if (gap < 0 || gap > maxGapPx) {
+            return false
+        }
+
+        val overlapWidth = min(a.right, b.right) - max(a.left, b.left)
+        val minWidth = min(a.width(), b.width()).toFloat().takeIf { it > 0 } ?: return false
+        val overlapRatio = overlapWidth.toFloat() / minWidth
+        val leftAligned = kotlin.math.abs(a.left - b.left) <= alignThresholdPx
+        return overlapRatio >= PARAGRAPH_OVERLAP_THRESHOLD || leftAligned
     }
 
     private fun isSameLine(a: Rect, b: Rect): Boolean {
@@ -1006,11 +1066,14 @@ class StateOperatorImpl @Inject constructor(
         const val MAX_OCR_WIDTH_PX = 1080
         const val MIN_TEXT_BLOCK_DP = 8
         const val MERGE_LINE_GAP_DP = 12
+        const val MERGE_PARAGRAPH_GAP_DP = 8
+        const val MERGE_PARAGRAPH_ALIGN_DP = 12
         const val MAX_TRANSLATION_BLOCKS = 60
         const val MAX_TRANSLATION_CHARS = 4000
         const val MAX_TRANSLATION_CACHE_SIZE = 500
         const val IOU_THRESHOLD = 0.7f
         const val LINE_OVERLAP_THRESHOLD = 0.6f
+        const val PARAGRAPH_OVERLAP_THRESHOLD = 0.6f
     }
 
     private fun startTranslation(
