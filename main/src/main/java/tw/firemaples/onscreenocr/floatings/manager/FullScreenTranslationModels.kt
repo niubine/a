@@ -7,6 +7,7 @@ data class OverlayTextBlock(
     val text: String,
     val boundingBox: Rect,
     val lineCountHint: Int = 1,
+    val source: OverlayTextSource = OverlayTextSource.Unknown,
     val overlayStyle: OverlayStyle? = null,
 )
 
@@ -26,6 +27,14 @@ enum class LayoutType {
     Bubble,
     Label,
     Paragraph,
+    Unknown,
+}
+
+enum class OverlayTextSource {
+    Accessibility,
+    Ocr,
+    Fallback,
+    Mixed,
     Unknown,
 }
 

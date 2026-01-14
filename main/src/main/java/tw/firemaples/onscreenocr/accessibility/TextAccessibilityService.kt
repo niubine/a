@@ -5,6 +5,7 @@ import android.graphics.Rect
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import tw.firemaples.onscreenocr.floatings.manager.OverlayTextBlock
+import tw.firemaples.onscreenocr.floatings.manager.OverlayTextSource
 import kotlin.math.roundToInt
 
 class TextAccessibilityService : AccessibilityService() {
@@ -77,6 +78,7 @@ class TextAccessibilityService : AccessibilityService() {
                     text = content,
                     boundingBox = rect,
                     lineCountHint = countLineBreaks(content),
+                    source = OverlayTextSource.Accessibility,
                 )
             )
             return true

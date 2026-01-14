@@ -13,6 +13,7 @@ import tw.firemaples.onscreenocr.di.MainImmediateCoroutineScope
 import tw.firemaples.onscreenocr.floatings.manager.NavState
 import tw.firemaples.onscreenocr.floatings.manager.NavigationAction
 import tw.firemaples.onscreenocr.floatings.manager.OverlayTextBlock
+import tw.firemaples.onscreenocr.floatings.manager.OverlayTextSource
 import tw.firemaples.onscreenocr.floatings.manager.StateNavigator
 import tw.firemaples.onscreenocr.recognition.RecognitionResult
 import javax.inject.Inject
@@ -146,6 +147,7 @@ class FullScreenTranslationViewModelImpl @Inject constructor(
                     text = recognitionResult.result,
                     boundingBox = fallbackRect,
                     lineCountHint = countLineBreaks(recognitionResult.result),
+                    source = OverlayTextSource.Fallback,
                 )
             )
         }
@@ -154,6 +156,7 @@ class FullScreenTranslationViewModelImpl @Inject constructor(
                 text = block.text,
                 boundingBox = block.boundingBox,
                 lineCountHint = block.lineCount.coerceAtLeast(1),
+                source = OverlayTextSource.Ocr,
             )
         }
     }
