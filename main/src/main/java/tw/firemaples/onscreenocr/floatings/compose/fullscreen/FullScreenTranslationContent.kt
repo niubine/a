@@ -134,9 +134,10 @@ private fun OverlayText(
     val boxHeightPx = block.boundingBox.height().toFloat()
     val paddingHorizontalPx = min(rawPaddingHorizontalPx, boxWidthPx * 0.15f)
     val paddingVerticalPx = min(rawPaddingVerticalPx, boxHeightPx * 0.2f)
-    val maxHeightPx = min(
-        max(boxHeightPx, boxHeightPx * MAX_HEIGHT_MULTIPLIER),
-        with(density) { MAX_HEIGHT_DP.dp.toPx() },
+    val maxHeightCapPx = with(density) { MAX_HEIGHT_DP.dp.toPx() }
+    val maxHeightPx = max(
+        boxHeightPx,
+        min(boxHeightPx * MAX_HEIGHT_MULTIPLIER, maxHeightCapPx),
     )
     val availableWidthPx = max(1f, boxWidthPx - paddingHorizontalPx * 2f)
     val availableHeightPx = max(1f, maxHeightPx - paddingVerticalPx * 2f)
