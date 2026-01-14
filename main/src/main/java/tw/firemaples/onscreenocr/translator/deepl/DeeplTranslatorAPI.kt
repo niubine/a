@@ -51,4 +51,48 @@ object DeeplTranslatorAPI {
         logger.debug("Got translation result: $translatedText")
         return Result.success(translatedText)
     }
+
+    suspend fun translate(
+        text: List<String>,
+        sourceLang: String?,
+        targetLang: String,
+    ): Result<List<String>> {
+        if (text.isEmpty()) {
+            return Result.success(emptyList())
+        }
+
+        logger.debug(
+            "Start translate, textCount: ${text.size}, source: $sourceLang, target: $targetLang"
+        )
+
+        val response = apiService.translate(
+            DeeplTranslateRequest(
+                text = text,
+                sourceLang = sourceLang,
+                targetLang = targetLang,
+                languageModel = LANGUAGE_MODEL,
+                usageType = USAGE_TYPE,
+            )
+        )
+
+        if (!response.isSuccessful) {
+            return Result.failure(
+                IllegalStateException(
+                    "API failed(${response.code()}): ${response.errorBody()?.toString()}"
+                )
+            )
+        }
+
+        val translations = response.body()?.translations
+            ?: return Result.failure(IllegalStateException("Got empty translation result"))
+
+        if (translations.size != text.size) {
+            return Result.failure(IllegalStateException("Got unexpected translation size"))
+        }
+
+        val translatedTexts = translations.map { it.text ?: "" }
+
+        logger.debug("Got translation result: ${translatedTexts.size}")
+        return Result.success(translatedTexts)
+    }
 }

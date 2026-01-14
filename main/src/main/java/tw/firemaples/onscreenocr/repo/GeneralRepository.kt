@@ -7,11 +7,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
-import tw.firemaples.onscreenocr.floatings.readme.ReadmeView
 import tw.firemaples.onscreenocr.pages.setting.SettingManager
 import tw.firemaples.onscreenocr.pref.AppPref
 
 class GeneralRepository {
+    private val readmeVersion = "2.2.0"
+
     fun isRememberLastSelection(): Flow<Boolean> = flow {
         emit(SettingManager.saveLastSelectionArea)
     }.flowOn(Dispatchers.Default)
@@ -27,7 +28,7 @@ class GeneralRepository {
     }
 
     fun isReadmeAlreadyShown(): Flow<Boolean> = flow {
-        val lastVersionName = ReadmeView.VERSION
+        val lastVersionName = readmeVersion
         val lastShownName = AppPref.lastReadmeShownVersion
 
         if (lastVersionName != lastShownName) {

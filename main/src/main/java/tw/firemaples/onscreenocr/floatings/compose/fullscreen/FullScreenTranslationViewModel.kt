@@ -97,10 +97,12 @@ class FullScreenTranslationViewModelImpl @Inject constructor(
             }
 
             is NavState.FullScreenTextTranslating -> {
-                val originalBlocks = buildOriginalBlocks(
-                    recognitionResult = navState.recognitionResult,
-                    fallbackRect = navState.selectedRect,
-                )
+                val originalBlocks = navState.originalBlocks.ifEmpty {
+                    buildOriginalBlocks(
+                        recognitionResult = navState.recognitionResult,
+                        fallbackRect = navState.selectedRect,
+                    )
+                }
                 state.update {
                     it.copy(
                         isProcessing = true,
@@ -143,6 +145,7 @@ class FullScreenTranslationViewModelImpl @Inject constructor(
                 OverlayTextBlock(
                     text = recognitionResult.result,
                     boundingBox = fallbackRect,
+                    lineCountHint = countLineBreaks(recognitionResult.result),
                 )
             )
         }
@@ -150,7 +153,16 @@ class FullScreenTranslationViewModelImpl @Inject constructor(
             OverlayTextBlock(
                 text = block.text,
                 boundingBox = block.boundingBox,
+                lineCountHint = countLineBreaks(block.text),
             )
         }
+    }
+
+    private fun countLineBreaks(text: String): Int {
+        val trimmed = text.trim()
+        if (trimmed.isBlank()) {
+            return 1
+        }
+        return trimmed.count { it == '\n' } + 1
     }
 }

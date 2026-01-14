@@ -217,6 +217,7 @@ sealed class NavState {
         val croppedBitmap: Bitmap,
         val recognitionResult: RecognitionResult,
         val translationProviderType: TranslationProviderType,
+        val originalBlocks: List<OverlayTextBlock>,
     ) : NavState(), BitmapIncluded {
         override val bitmap: Bitmap
             get() = croppedBitmap

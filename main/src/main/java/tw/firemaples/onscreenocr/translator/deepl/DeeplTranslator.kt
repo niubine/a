@@ -86,7 +86,7 @@ object DeeplTranslator : Translator {
         return TranslationResult.TranslationFailed(IllegalStateException("Illegal state"))
     }
 
-    private fun toDeeplLang(code: String?): String? {
+    internal fun toDeeplLang(code: String?): String? {
         if (code.isNullOrBlank()) {
             return null
         }

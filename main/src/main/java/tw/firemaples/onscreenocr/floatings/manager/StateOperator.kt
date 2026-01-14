@@ -7,6 +7,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tw.firemaples.onscreenocr.R
+import tw.firemaples.onscreenocr.accessibility.TextAccessibilityService
 import tw.firemaples.onscreenocr.di.MainCoroutineScope
 import tw.firemaples.onscreenocr.floatings.manager.StateOperator.Companion.SCREENSHOT_DELAY
 import tw.firemaples.onscreenocr.log.FirebaseEvent
@@ -28,13 +30,19 @@ import tw.firemaples.onscreenocr.translator.TranslationProviderType
 import tw.firemaples.onscreenocr.translator.TranslationResult
 import tw.firemaples.onscreenocr.translator.Translator
 import tw.firemaples.onscreenocr.translator.azure.MicrosoftAzureTranslator
+import tw.firemaples.onscreenocr.translator.deepl.DeeplTranslator
+import tw.firemaples.onscreenocr.translator.deepl.DeeplTranslatorAPI
 import tw.firemaples.onscreenocr.utils.Constants
 import tw.firemaples.onscreenocr.utils.Logger
 import tw.firemaples.onscreenocr.utils.UIUtils
+import tw.firemaples.onscreenocr.utils.firstPart
 import tw.firemaples.onscreenocr.utils.setReusable
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 interface StateOperator {
     val action: SharedFlow<StateOperatorAction>
@@ -54,6 +62,13 @@ class StateOperatorImpl @Inject constructor(
     private val logger: Logger by lazy { Logger(this::class) }
 
     override val action = MutableSharedFlow<StateOperatorAction>()
+
+    private val translationCache = object :
+        LinkedHashMap<String, String>(MAX_TRANSLATION_CACHE_SIZE, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean {
+            return size > MAX_TRANSLATION_CACHE_SIZE
+        }
+    }
 
     private val currentNavState: NavState
         get() = stateNavigator.currentNavState.value
@@ -234,6 +249,72 @@ class StateOperatorImpl @Inject constructor(
         }
     }
 
+    private fun startRecognition(
+        ocrLang: String,
+        ocrProvider: TextRecognitionProviderType,
+        croppedBitmap: Bitmap,
+        parentRect: Rect,
+        selectedRect: Rect,
+    ) = scope.launch {
+        stateNavigator.updateState(
+            NavState.TextRecognizing(
+                parentRect = parentRect,
+                selectedRect = selectedRect,
+                croppedBitmap = croppedBitmap,
+            )
+        )
+
+        try {
+            action.emit(StateOperatorAction.ShowResultView)
+
+            val recognizer = TextRecognizer.getRecognizer(ocrProvider)
+            val language = TextRecognizer.getLanguage(ocrLang, ocrProvider)!!
+
+            FirebaseEvent.logStartOCR(recognizer.name)
+            var result = withContext(Dispatchers.Default) {
+                recognizer.recognize(
+                    lang = language,
+                    bitmap = croppedBitmap,
+                )
+            }
+            logger.debug("On text recognized: $result")
+
+            if (SettingManager.removeSpacesInCJK) {
+                val cjkLang = arrayOf("zh", "ja", "ko")
+                if (cjkLang.contains(ocrLang.split("-").getOrNull(0))) {
+                    result = result.copy(
+                        result = result.result.replace(" ", "")
+                    )
+                }
+                logger.debug("Remove CJK spaces: $result")
+            }
+
+            FirebaseEvent.logOCRFinished(recognizer.name)
+
+            stateNavigator.navigate(
+                NavigationAction.NavigateToStartTranslation(
+                    croppedBitmap = croppedBitmap,
+                    parentRect = parentRect,
+                    selectedRect = selectedRect,
+                    recognitionResult = result,
+                )
+            )
+        } catch (e: Exception) {
+            val error =
+                if (e.message?.contains(Constants.errorInputImageIsTooSmall) == true) {
+                    context.getString(R.string.error_selected_area_too_small)
+                } else
+                    e.message
+                        ?: context.getString(R.string.error_an_unknown_error_found_while_recognition_text)
+
+            logger.warn(t = e)
+            showError(error)
+            FirebaseEvent.logOCRFailed(
+                TextRecognizer.getRecognizer(ocrProvider).name, e
+            )
+        }
+    }
+
     private fun startFullScreenCapturing(
         ocrLang: String,
         ocrProvider: TextRecognitionProviderType,
@@ -307,74 +388,6 @@ class StateOperatorImpl @Inject constructor(
         }
     }
 
-    private fun startRecognition(
-        ocrLang: String,
-        ocrProvider: TextRecognitionProviderType,
-        croppedBitmap: Bitmap,
-        parentRect: Rect,
-        selectedRect: Rect,
-    ) = scope.launch {
-        stateNavigator.updateState(
-            NavState.TextRecognizing(
-                parentRect = parentRect,
-                selectedRect = selectedRect,
-                croppedBitmap = croppedBitmap,
-            )
-        )
-
-        try {
-            action.emit(StateOperatorAction.ShowResultView)
-
-            val recognizer = TextRecognizer.getRecognizer(ocrProvider)
-            val language = TextRecognizer.getLanguage(ocrLang, ocrProvider)!!
-
-            FirebaseEvent.logStartOCR(recognizer.name)
-            var result = withContext(Dispatchers.Default) {
-                recognizer.recognize(
-                    lang = language,
-                    bitmap = croppedBitmap,
-                )
-            }
-            logger.debug("On text recognized: $result")
-//                croppedBitmap.recycle() // to be used in the text editor view
-
-            // TODO move logic
-            if (SettingManager.removeSpacesInCJK) {
-                val cjkLang = arrayOf("zh", "ja", "ko")
-                if (cjkLang.contains(ocrLang.split("-").getOrNull(0))) {
-                    result = result.copy(
-                        result = result.result.replace(" ", "")
-                    )
-                }
-                logger.debug("Remove CJK spaces: $result")
-            }
-
-            FirebaseEvent.logOCRFinished(recognizer.name)
-
-            stateNavigator.navigate(
-                NavigationAction.NavigateToStartTranslation(
-                    croppedBitmap = croppedBitmap,
-                    parentRect = parentRect,
-                    selectedRect = selectedRect,
-                    recognitionResult = result,
-                )
-            )
-        } catch (e: Exception) {
-            val error =
-                if (e.message?.contains(Constants.errorInputImageIsTooSmall) == true) {
-                    context.getString(R.string.error_selected_area_too_small)
-                } else
-                    e.message
-                        ?: context.getString(R.string.error_an_unknown_error_found_while_recognition_text)
-
-            logger.warn(t = e)
-            showError(error)
-            FirebaseEvent.logOCRFailed(
-                TextRecognizer.getRecognizer(ocrProvider).name, e
-            )
-        }
-    }
-
     private fun startFullScreenRecognition(
         ocrLang: String,
         ocrProvider: TextRecognitionProviderType,
@@ -392,33 +405,49 @@ class StateOperatorImpl @Inject constructor(
         try {
             val recognizer = TextRecognizer.getRecognizer(ocrProvider)
             val language = TextRecognizer.getLanguage(ocrLang, ocrProvider)!!
-
-            FirebaseEvent.logStartOCR(recognizer.name)
-            var result = withContext(Dispatchers.Default) {
-                recognizer.recognize(
-                    lang = language,
-                    bitmap = fullBitmap,
-                )
+            val accessibilityDeferred = async(Dispatchers.Default) {
+                TextAccessibilityService.snapshotTextBlocks(context.packageName)
             }
-            logger.debug("On text recognized (full screen): $result")
+            val scaled = scaleBitmapForOcr(fullBitmap)
 
-            if (SettingManager.removeSpacesInCJK) {
-                val cjkLang = arrayOf("zh", "ja", "ko")
-                if (cjkLang.contains(ocrLang.split("-").getOrNull(0))) {
-                    result = result.copy(
-                        result = result.result.replace(" ", "")
+            try {
+                FirebaseEvent.logStartOCR(recognizer.name)
+                var result = withContext(Dispatchers.Default) {
+                    recognizer.recognize(
+                        lang = language,
+                        bitmap = scaled.bitmap,
                     )
                 }
-                logger.debug("Remove CJK spaces: $result")
+                if (scaled.isScaled) {
+                    result = scaleRecognitionResult(result, scaled.scaleX, scaled.scaleY)
+                }
+                logger.debug("On text recognized (full screen): $result")
+
+                if (SettingManager.removeSpacesInCJK) {
+                    val cjkLang = arrayOf("zh", "ja", "ko")
+                    if (cjkLang.contains(ocrLang.split("-").getOrNull(0))) {
+                        result = result.copy(
+                            result = result.result.replace(" ", "")
+                        )
+                    }
+                    logger.debug("Remove CJK spaces: $result")
+                }
+
+                FirebaseEvent.logOCRFinished(recognizer.name)
+
+                val accessibilityBlocks = accessibilityDeferred.await()
+
+                startFullScreenTranslation(
+                    screenRect = screenRect,
+                    fullBitmap = fullBitmap,
+                    recognitionResult = result,
+                    accessibilityBlocks = accessibilityBlocks,
+                )
+            } finally {
+                if (scaled.isScaled) {
+                    scaled.bitmap.setReusable()
+                }
             }
-
-            FirebaseEvent.logOCRFinished(recognizer.name)
-
-            startFullScreenTranslation(
-                screenRect = screenRect,
-                fullBitmap = fullBitmap,
-                recognitionResult = result,
-            )
         } catch (e: Exception) {
             val error =
                 if (e.message?.contains(Constants.errorInputImageIsTooSmall) == true) {
@@ -439,9 +468,19 @@ class StateOperatorImpl @Inject constructor(
         screenRect: Rect,
         fullBitmap: Bitmap,
         recognitionResult: RecognitionResult,
+        accessibilityBlocks: List<OverlayTextBlock>,
     ) = scope.launch {
         try {
             val translator = Translator.getTranslator()
+            val ocrBlocks = buildOverlayBlocksFromRecognition(
+                recognitionResult = recognitionResult,
+                fallbackRect = screenRect,
+                includeFallback = accessibilityBlocks.isEmpty(),
+            )
+            val originalBlocks = mergeTextBlocks(
+                accessibilityBlocks = accessibilityBlocks,
+                ocrBlocks = ocrBlocks,
+            )
 
             stateNavigator.updateState(
                 NavState.FullScreenTextTranslating(
@@ -450,6 +489,7 @@ class StateOperatorImpl @Inject constructor(
                     croppedBitmap = fullBitmap,
                     recognitionResult = recognitionResult,
                     translationProviderType = translator.type,
+                    originalBlocks = originalBlocks,
                 )
             )
 
@@ -459,27 +499,17 @@ class StateOperatorImpl @Inject constructor(
                 translator = translator,
             )
 
-            val textBlocks = recognitionResult.textBlocks
-                .filter { it.text.isNotBlank() }
-                .ifEmpty {
-                    listOf(
-                        RecognizedTextBlock(
-                            text = recognitionResult.result,
-                            boundingBox = screenRect,
-                        )
-                    )
-                }
+            val translatedBlocks = when (
+                val translationResult = translateBlocks(
+                    translator = translator,
+                    sourceLangCode = recognitionResult.langCode,
+                    originalBlocks = originalBlocks,
+                    fallbackRect = screenRect,
+                )
+            ) {
+                is BlockTranslationResult.Success -> translationResult.translatedBlocks
 
-            val delimiter = "␟"
-            val mergedText = textBlocks.joinToString(separator = delimiter) { it.text }
-
-            val translatedText = when (val translationResult = translator.translate(
-                text = mergedText,
-                sourceLangCode = recognitionResult.langCode,
-            )) {
-                is TranslationResult.TranslatedResult -> translationResult.result
-
-                is TranslationResult.SourceLangNotSupport -> {
+                is BlockTranslationResult.SourceLangNotSupport -> {
                     FirebaseEvent.logTranslationSourceLangNotSupport(
                         translator, recognitionResult.langCode,
                     )
@@ -487,7 +517,7 @@ class StateOperatorImpl @Inject constructor(
                     return@launch
                 }
 
-                is TranslationResult.TranslationFailed -> {
+                is BlockTranslationResult.Failed -> {
                     FirebaseEvent.logTranslationTextFailed(translator)
                     val error = translationResult.error
                     if (error is MicrosoftAzureTranslator.Error) {
@@ -504,27 +534,7 @@ class StateOperatorImpl @Inject constructor(
                     }
                     return@launch
                 }
-
-                TranslationResult.OCROnlyResult,
-                TranslationResult.OuterTranslatorLaunched -> {
-                    showError(context.getString(R.string.error_full_screen_translation_not_supported))
-                    return@launch
-                }
             }
-
-            val originalBlocks = textBlocks.map { block ->
-                OverlayTextBlock(
-                    text = block.text,
-                    boundingBox = block.boundingBox,
-                )
-            }
-
-            val translatedBlocks = buildTranslatedBlocks(
-                translatedText = translatedText,
-                originalBlocks = originalBlocks,
-                fallbackRect = screenRect,
-                delimiter = delimiter,
-            )
 
             FirebaseEvent.logTranslationTextFinished(translator)
 
@@ -548,6 +558,511 @@ class StateOperatorImpl @Inject constructor(
         }
     }
 
+    private data class ScaledBitmap(
+        val bitmap: Bitmap,
+        val scaleX: Float,
+        val scaleY: Float,
+        val isScaled: Boolean,
+    )
+
+    private fun scaleBitmapForOcr(bitmap: Bitmap): ScaledBitmap {
+        if (bitmap.width <= MAX_OCR_WIDTH_PX) {
+            return ScaledBitmap(bitmap, 1f, 1f, false)
+        }
+
+        val scale = MAX_OCR_WIDTH_PX.toFloat() / bitmap.width.toFloat()
+        val targetWidth = MAX_OCR_WIDTH_PX
+        val targetHeight = max(1, (bitmap.height * scale).roundToInt())
+        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
+        val scaleX = bitmap.width.toFloat() / targetWidth.toFloat()
+        val scaleY = bitmap.height.toFloat() / targetHeight.toFloat()
+        return ScaledBitmap(scaledBitmap, scaleX, scaleY, true)
+    }
+
+    private fun scaleRecognitionResult(
+        result: RecognitionResult,
+        scaleX: Float,
+        scaleY: Float,
+    ): RecognitionResult {
+        if (scaleX == 1f && scaleY == 1f) {
+            return result
+        }
+
+        return result.copy(
+            boundingBoxes = result.boundingBoxes.map { rect ->
+                scaleRect(rect, scaleX, scaleY)
+            },
+            textBlocks = result.textBlocks.map { block ->
+                RecognizedTextBlock(
+                    text = block.text,
+                    boundingBox = scaleRect(block.boundingBox, scaleX, scaleY),
+                )
+            },
+        )
+    }
+
+    private fun scaleRect(rect: Rect, scaleX: Float, scaleY: Float): Rect {
+        return Rect(
+            (rect.left * scaleX).roundToInt(),
+            (rect.top * scaleY).roundToInt(),
+            (rect.right * scaleX).roundToInt(),
+            (rect.bottom * scaleY).roundToInt(),
+        )
+    }
+
+    private fun buildOverlayBlocksFromRecognition(
+        recognitionResult: RecognitionResult,
+        fallbackRect: Rect,
+        includeFallback: Boolean,
+    ): List<OverlayTextBlock> {
+        val blocks = recognitionResult.textBlocks
+            .map { block ->
+                OverlayTextBlock(
+                    text = block.text.trim(),
+                    boundingBox = block.boundingBox,
+                )
+            }
+            .filter { it.text.isNotBlank() }
+
+        if (blocks.isNotEmpty()) {
+            return blocks
+        }
+
+        if (!includeFallback) {
+            return emptyList()
+        }
+
+        val fallbackText = recognitionResult.result.trim()
+        if (fallbackText.isBlank()) {
+            return emptyList()
+        }
+        return listOf(
+            OverlayTextBlock(
+                text = fallbackText,
+                boundingBox = fallbackRect,
+            )
+        )
+    }
+
+    private fun mergeTextBlocks(
+        accessibilityBlocks: List<OverlayTextBlock>,
+        ocrBlocks: List<OverlayTextBlock>,
+    ): List<OverlayTextBlock> {
+        val minSizePx = dpToPx(MIN_TEXT_BLOCK_DP)
+        val filteredAcc = filterTextBlocks(accessibilityBlocks, minSizePx)
+        val filteredOcr = filterTextBlocks(ocrBlocks, minSizePx)
+
+        if (filteredAcc.isEmpty() && filteredOcr.isEmpty()) {
+            return emptyList()
+        }
+
+        val dedupedOcr = if (filteredAcc.isEmpty()) {
+            filteredOcr
+        } else {
+            filteredOcr.filter { ocr ->
+                filteredAcc.none { acc ->
+                    calculateIoU(ocr.boundingBox, acc.boundingBox) >= IOU_THRESHOLD
+                }
+            }
+        }
+
+        val combined = filteredAcc + dedupedOcr
+        val mergedLines = mergeBlocksByLine(combined, dpToPx(MERGE_LINE_GAP_DP))
+        val mergedParagraphs = mergeBlocksByParagraph(
+            mergedLines,
+            maxGapPx = dpToPx(MERGE_PARAGRAPH_GAP_DP),
+            alignThresholdPx = dpToPx(MERGE_PARAGRAPH_ALIGN_DP),
+        )
+        return mergedParagraphs.sortedWith(
+            compareBy<OverlayTextBlock> { it.boundingBox.top }
+                .thenBy { it.boundingBox.left }
+        )
+    }
+
+    private fun filterTextBlocks(
+        blocks: List<OverlayTextBlock>,
+        minSizePx: Int,
+    ): List<OverlayTextBlock> {
+        return blocks.mapNotNull { block ->
+            val text = block.text.trim()
+            if (text.isBlank()) {
+                return@mapNotNull null
+            }
+            val rect = block.boundingBox
+            if (rect.width() < minSizePx || rect.height() < minSizePx) {
+                return@mapNotNull null
+            }
+            OverlayTextBlock(
+                text = text,
+                boundingBox = rect,
+                lineCountHint = countLineBreaks(text),
+            )
+        }
+    }
+
+    private fun mergeBlocksByLine(
+        blocks: List<OverlayTextBlock>,
+        maxGapPx: Int,
+    ): List<OverlayTextBlock> {
+        if (blocks.isEmpty()) {
+            return emptyList()
+        }
+
+        val sorted = blocks.sortedWith(
+            compareBy<OverlayTextBlock> { it.boundingBox.top }
+                .thenBy { it.boundingBox.left }
+        )
+        val joiner = SettingManager.textBlockJoiner.joiner
+        val result = mutableListOf<OverlayTextBlock>()
+        var current = sorted.first()
+
+        for (next in sorted.drop(1)) {
+            if (isSameLine(current.boundingBox, next.boundingBox) &&
+                gapBetween(current.boundingBox, next.boundingBox) <= maxGapPx
+            ) {
+                val mergedText = listOf(current.text, next.text)
+                    .filter { it.isNotBlank() }
+                    .joinToString(joiner)
+                val mergedRect = Rect(current.boundingBox)
+                mergedRect.union(next.boundingBox)
+                current = OverlayTextBlock(
+                    text = mergedText,
+                    boundingBox = mergedRect,
+                    lineCountHint = countLineBreaks(mergedText),
+                )
+            } else {
+                result.add(current)
+                current = next
+            }
+        }
+
+        result.add(current)
+        return result
+    }
+
+    private fun mergeBlocksByParagraph(
+        blocks: List<OverlayTextBlock>,
+        maxGapPx: Int,
+        alignThresholdPx: Int,
+    ): List<OverlayTextBlock> {
+        if (blocks.isEmpty()) {
+            return emptyList()
+        }
+
+        val sorted = blocks.sortedWith(
+            compareBy<OverlayTextBlock> { it.boundingBox.top }
+                .thenBy { it.boundingBox.left }
+        )
+        val result = mutableListOf<OverlayTextBlock>()
+        var current = sorted.first()
+
+        for (next in sorted.drop(1)) {
+            if (shouldMergeVertically(current.boundingBox, next.boundingBox, maxGapPx, alignThresholdPx)) {
+                val mergedText = listOf(current.text, next.text)
+                    .filter { it.isNotBlank() }
+                    .joinToString("\n")
+                val mergedRect = Rect(current.boundingBox)
+                mergedRect.union(next.boundingBox)
+                current = OverlayTextBlock(
+                    text = mergedText,
+                    boundingBox = mergedRect,
+                    lineCountHint = countLineBreaks(mergedText),
+                )
+            } else {
+                result.add(current)
+                current = next
+            }
+        }
+
+        result.add(current)
+        return result
+    }
+
+    private fun shouldMergeVertically(
+        a: Rect,
+        b: Rect,
+        maxGapPx: Int,
+        alignThresholdPx: Int,
+    ): Boolean {
+        if (b.top < a.top) {
+            return false
+        }
+        val gap = b.top - a.bottom
+        if (gap < 0 || gap > maxGapPx) {
+            return false
+        }
+
+        val overlapWidth = min(a.right, b.right) - max(a.left, b.left)
+        val minWidth = min(a.width(), b.width()).toFloat().takeIf { it > 0 } ?: return false
+        val overlapRatio = overlapWidth.toFloat() / minWidth
+        val leftAligned = kotlin.math.abs(a.left - b.left) <= alignThresholdPx
+        return overlapRatio >= PARAGRAPH_OVERLAP_THRESHOLD || leftAligned
+    }
+
+    private fun countLineBreaks(text: String): Int {
+        val trimmed = text.trim()
+        if (trimmed.isBlank()) {
+            return 1
+        }
+        return trimmed.count { it == '\n' } + 1
+    }
+
+    private fun isSameLine(a: Rect, b: Rect): Boolean {
+        val overlapHeight = min(a.bottom, b.bottom) - max(a.top, b.top)
+        if (overlapHeight <= 0) {
+            return false
+        }
+        val minHeight = min(a.height(), b.height()).toFloat()
+        return (overlapHeight / minHeight) >= LINE_OVERLAP_THRESHOLD
+    }
+
+    private fun gapBetween(a: Rect, b: Rect): Int {
+        return max(0, b.left - a.right)
+    }
+
+    private fun calculateIoU(a: Rect, b: Rect): Float {
+        val left = max(a.left, b.left)
+        val top = max(a.top, b.top)
+        val right = min(a.right, b.right)
+        val bottom = min(a.bottom, b.bottom)
+        if (right <= left || bottom <= top) {
+            return 0f
+        }
+
+        val intersectionArea = (right - left) * (bottom - top)
+        val unionArea = (a.width() * a.height()) + (b.width() * b.height()) - intersectionArea
+        if (unionArea <= 0) {
+            return 0f
+        }
+        return intersectionArea.toFloat() / unionArea.toFloat()
+    }
+
+    private sealed interface BlockTranslationResult {
+        data class Success(val translatedBlocks: List<OverlayTextBlock>) : BlockTranslationResult
+        data class Failed(val error: Throwable) : BlockTranslationResult
+        data class SourceLangNotSupport(val type: TranslationProviderType) : BlockTranslationResult
+    }
+
+    private suspend fun translateBlocks(
+        translator: Translator,
+        sourceLangCode: String,
+        originalBlocks: List<OverlayTextBlock>,
+        fallbackRect: Rect,
+    ): BlockTranslationResult {
+        if (originalBlocks.isEmpty()) {
+            return BlockTranslationResult.Success(emptyList())
+        }
+
+        return if (translator.type == TranslationProviderType.Deepl) {
+            translateBlocksWithDeepl(
+                sourceLangCode = sourceLangCode,
+                originalBlocks = originalBlocks,
+            )
+        } else {
+            translateBlocksWithDelimiter(
+                translator = translator,
+                sourceLangCode = sourceLangCode,
+                originalBlocks = originalBlocks,
+                fallbackRect = fallbackRect,
+            )
+        }
+    }
+
+    private suspend fun translateBlocksWithDelimiter(
+        translator: Translator,
+        sourceLangCode: String,
+        originalBlocks: List<OverlayTextBlock>,
+        fallbackRect: Rect,
+    ): BlockTranslationResult {
+        val delimiter = "?"
+        val mergedText = originalBlocks.joinToString(separator = delimiter) { it.text }
+
+        return when (val translationResult = translator.translate(
+            text = mergedText,
+            sourceLangCode = sourceLangCode,
+        )) {
+            is TranslationResult.TranslatedResult -> {
+                BlockTranslationResult.Success(
+                    buildTranslatedBlocks(
+                        translatedText = translationResult.result,
+                        originalBlocks = originalBlocks,
+                        fallbackRect = fallbackRect,
+                        delimiter = delimiter,
+                    )
+                )
+            }
+
+            is TranslationResult.SourceLangNotSupport ->
+                BlockTranslationResult.SourceLangNotSupport(translationResult.type)
+
+            is TranslationResult.TranslationFailed ->
+                BlockTranslationResult.Failed(translationResult.error)
+
+            TranslationResult.OCROnlyResult,
+            TranslationResult.OuterTranslatorLaunched ->
+                BlockTranslationResult.Failed(
+                    IllegalStateException(
+                        context.getString(R.string.error_full_screen_translation_not_supported)
+                    )
+                )
+        }
+    }
+
+    private suspend fun translateBlocksWithDeepl(
+        sourceLangCode: String,
+        originalBlocks: List<OverlayTextBlock>,
+    ): BlockTranslationResult {
+        if (!DeeplTranslator.isLangSupport()) {
+            return BlockTranslationResult.SourceLangNotSupport(TranslationProviderType.Deepl)
+        }
+
+        val targetLangCode = DeeplTranslator.supportedLanguages()
+            .firstOrNull { it.selected }
+            ?.code
+            ?: return BlockTranslationResult.Failed(
+                IllegalArgumentException("The selected translation language is not found")
+            )
+
+        if (sourceLangCode.firstPart().equals(targetLangCode.firstPart(), ignoreCase = true)) {
+            val translatedBlocks = originalBlocks.map { block ->
+                OverlayTextBlock(
+                    text = block.text,
+                    boundingBox = block.boundingBox,
+                    lineCountHint = block.lineCountHint,
+                )
+            }
+            return BlockTranslationResult.Success(translatedBlocks)
+        }
+
+        val sourceLang = DeeplTranslator.toDeeplLang(sourceLangCode).takeUnless { it.isNullOrBlank() }
+        val targetLang = DeeplTranslator.toDeeplLang(targetLangCode) ?: targetLangCode
+
+        val originalTexts = originalBlocks.map { it.text }
+        val resolved = MutableList<String?>(originalTexts.size) { null }
+        val pending = mutableListOf<IndexedValue<String>>()
+
+        originalTexts.forEachIndexed { index, text ->
+            val key = buildCacheKey(
+                text = text,
+                sourceLangCode = sourceLangCode,
+                targetLangCode = targetLangCode,
+                providerType = TranslationProviderType.Deepl,
+            )
+            val cached = getCachedTranslation(key)
+            if (cached != null) {
+                resolved[index] = cached
+            } else {
+                pending.add(IndexedValue(index, text))
+            }
+        }
+
+        if (pending.isNotEmpty()) {
+            val chunks = chunkIndexedTexts(
+                items = pending,
+                maxBlocks = MAX_TRANSLATION_BLOCKS,
+                maxChars = MAX_TRANSLATION_CHARS,
+            )
+            for (chunk in chunks) {
+                val chunkTexts = chunk.map { it.value }
+                val chunkResult = DeeplTranslatorAPI.translate(
+                    text = chunkTexts,
+                    sourceLang = sourceLang,
+                    targetLang = targetLang,
+                )
+                val translations = chunkResult.getOrElse {
+                    return BlockTranslationResult.Failed(it)
+                }
+                if (translations.size != chunk.size) {
+                    return BlockTranslationResult.Failed(
+                        IllegalStateException("Translation result size mismatch")
+                    )
+                }
+                translations.forEachIndexed { index, translated ->
+                    val originalIndex = chunk[index].index
+                    resolved[originalIndex] = translated
+                    val key = buildCacheKey(
+                        text = chunk[index].value,
+                        sourceLangCode = sourceLangCode,
+                        targetLangCode = targetLangCode,
+                        providerType = TranslationProviderType.Deepl,
+                    )
+                    putCachedTranslation(key, translated)
+                }
+            }
+        }
+
+        val finalTexts = resolved.mapIndexed { index, text ->
+            text ?: originalTexts[index]
+        }
+        val translatedBlocks = originalBlocks.mapIndexed { index, block ->
+            OverlayTextBlock(
+                text = finalTexts[index],
+                boundingBox = block.boundingBox,
+                lineCountHint = block.lineCountHint,
+            )
+        }
+        return BlockTranslationResult.Success(translatedBlocks)
+    }
+
+    private fun chunkIndexedTexts(
+        items: List<IndexedValue<String>>,
+        maxBlocks: Int,
+        maxChars: Int,
+    ): List<List<IndexedValue<String>>> {
+        if (items.isEmpty()) {
+            return emptyList()
+        }
+
+        val chunks = mutableListOf<MutableList<IndexedValue<String>>>()
+        var current = mutableListOf<IndexedValue<String>>()
+        var currentChars = 0
+
+        for (item in items) {
+            val itemLength = item.value.length
+            val exceedBlocks = current.size >= maxBlocks
+            val exceedChars = current.isNotEmpty() && (currentChars + itemLength) > maxChars
+            if (exceedBlocks || exceedChars) {
+                chunks.add(current)
+                current = mutableListOf()
+                currentChars = 0
+            }
+            current.add(item)
+            currentChars += itemLength
+        }
+
+        if (current.isNotEmpty()) {
+            chunks.add(current)
+        }
+
+        return chunks
+    }
+
+    private fun buildCacheKey(
+        text: String,
+        sourceLangCode: String,
+        targetLangCode: String,
+        providerType: TranslationProviderType,
+    ): String {
+        return "${providerType.key}|${sourceLangCode}|${targetLangCode}|$text"
+    }
+
+    private fun getCachedTranslation(key: String): String? {
+        return synchronized(translationCache) {
+            translationCache[key]
+        }
+    }
+
+    private fun putCachedTranslation(key: String, value: String) {
+        synchronized(translationCache) {
+            translationCache[key] = value
+        }
+    }
+
+    private fun dpToPx(dp: Int): Int {
+        val density = context.resources.displayMetrics.density
+        return (dp * density).roundToInt()
+    }
+
     private fun buildTranslatedBlocks(
         translatedText: String,
         originalBlocks: List<OverlayTextBlock>,
@@ -563,6 +1078,7 @@ class StateOperatorImpl @Inject constructor(
                 OverlayTextBlock(
                     text = pieces[index],
                     boundingBox = block.boundingBox,
+                    lineCountHint = block.lineCountHint,
                 )
             }
         } else {
@@ -570,9 +1086,24 @@ class StateOperatorImpl @Inject constructor(
                 OverlayTextBlock(
                     text = translatedText.trim(),
                     boundingBox = fallbackRect,
+                    lineCountHint = countLineBreaks(translatedText),
                 )
             )
         }
+    }
+
+    private companion object {
+        const val MAX_OCR_WIDTH_PX = 1080
+        const val MIN_TEXT_BLOCK_DP = 8
+        const val MERGE_LINE_GAP_DP = 12
+        const val MERGE_PARAGRAPH_GAP_DP = 8
+        const val MERGE_PARAGRAPH_ALIGN_DP = 12
+        const val MAX_TRANSLATION_BLOCKS = 60
+        const val MAX_TRANSLATION_CHARS = 4000
+        const val MAX_TRANSLATION_CACHE_SIZE = 500
+        const val IOU_THRESHOLD = 0.7f
+        const val LINE_OVERLAP_THRESHOLD = 0.6f
+        const val PARAGRAPH_OVERLAP_THRESHOLD = 0.6f
     }
 
     private fun startTranslation(
