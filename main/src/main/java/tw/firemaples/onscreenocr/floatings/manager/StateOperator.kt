@@ -486,6 +486,7 @@ class StateOperatorImpl @Inject constructor(
             val originalBlocks = mergeTextBlocks(
                 accessibilityBlocks = accessibilityBlocks,
                 ocrBlocks = ocrBlocks,
+                bitmap = fullBitmap,
             )
 
             stateNavigator.updateState(
@@ -665,6 +666,7 @@ class StateOperatorImpl @Inject constructor(
     private fun mergeTextBlocks(
         accessibilityBlocks: List<OverlayTextBlock>,
         ocrBlocks: List<OverlayTextBlock>,
+        bitmap: Bitmap?,
     ): List<OverlayTextBlock> {
         val minSizePx = dpToPx(MIN_TEXT_BLOCK_DP)
         val filteredAcc = filterTextBlocks(accessibilityBlocks, minSizePx)
@@ -685,7 +687,7 @@ class StateOperatorImpl @Inject constructor(
         }
 
         val combined = filteredAcc + dedupedOcr
-        val mergedLines = mergeBlocksByLine(combined, dpToPx(MERGE_LINE_GAP_DP))
+        val mergedLines = mergeBlocksByLine(combined, dpToPx(MERGE_LINE_GAP_DP), bitmap)
         val mergedParagraphs = mergeBlocksByParagraph(
             mergedLines,
             maxGapPx = dpToPx(MERGE_PARAGRAPH_GAP_DP),
@@ -723,6 +725,7 @@ class StateOperatorImpl @Inject constructor(
     private fun mergeBlocksByLine(
         blocks: List<OverlayTextBlock>,
         maxGapPx: Int,
+        bitmap: Bitmap?,
     ): List<OverlayTextBlock> {
         if (blocks.isEmpty()) {
             return emptyList()
@@ -741,6 +744,7 @@ class StateOperatorImpl @Inject constructor(
                     line = line,
                     maxGapPx = maxGapPx,
                     joiner = joiner,
+                    bitmap = bitmap,
                 )
             )
         }
@@ -751,6 +755,7 @@ class StateOperatorImpl @Inject constructor(
         line: List<OverlayTextBlock>,
         maxGapPx: Int,
         joiner: String,
+        bitmap: Bitmap?,
     ): List<OverlayTextBlock> {
         if (line.isEmpty()) {
             return emptyList()
@@ -766,6 +771,7 @@ class StateOperatorImpl @Inject constructor(
                     next = next,
                     maxGapPx = maxGapPx,
                     lineGroupSize = lineSize,
+                    bitmap = bitmap,
                 )
             ) {
                 val mergedText = listOf(current.text, next.text)
@@ -880,6 +886,7 @@ class StateOperatorImpl @Inject constructor(
         next: OverlayTextBlock,
         maxGapPx: Int,
         lineGroupSize: Int,
+        bitmap: Bitmap?,
     ): Boolean {
         if (!isSameLine(current.boundingBox, next.boundingBox)) {
             return false
@@ -898,7 +905,13 @@ class StateOperatorImpl @Inject constructor(
         }
 
         val fillRatio = calculateFillRatio(current.boundingBox, next.boundingBox)
-        return fillRatio >= LINE_FILL_RATIO_THRESHOLD
+        if (fillRatio < LINE_FILL_RATIO_THRESHOLD) {
+            return false
+        }
+        if (bitmap != null && hasVisualSeparator(current.boundingBox, next.boundingBox, bitmap)) {
+            return false
+        }
+        return true
     }
 
     private fun calculateFillRatio(a: Rect, b: Rect): Float {
@@ -910,6 +923,53 @@ class StateOperatorImpl @Inject constructor(
         }
         val areaSum = (a.width() * a.height()) + (b.width() * b.height())
         return areaSum.toFloat() / unionArea.toFloat()
+    }
+
+    private fun hasVisualSeparator(a: Rect, b: Rect, bitmap: Bitmap): Boolean {
+        val overlapTop = max(a.top, b.top).coerceAtLeast(0)
+        val overlapBottom = min(a.bottom, b.bottom).coerceAtMost(bitmap.height - 1)
+        val overlapHeight = overlapBottom - overlapTop
+        if (overlapHeight < SEPARATOR_MIN_HEIGHT_PX) {
+            return false
+        }
+
+        val gap = gapBetween(a, b)
+        var leftX = (a.right - 1).coerceIn(0, bitmap.width - 1)
+        var rightX = (b.left + 1).coerceIn(0, bitmap.width - 1)
+        if (gap <= 0 || leftX >= rightX) {
+            val boundary = ((a.right + b.left) / 2).coerceIn(1, bitmap.width - 2)
+            leftX = boundary - 1
+            rightX = boundary + 1
+        }
+
+        val step = max(1, overlapHeight / SEPARATOR_SAMPLE_COUNT)
+        var y = overlapTop
+        var sum = 0f
+        var hits = 0
+        var count = 0
+        while (y <= overlapBottom) {
+            val cLeft = bitmap.getPixel(leftX, y)
+            val cRight = bitmap.getPixel(rightX, y)
+            val diff = colorDistance(cLeft, cRight).toFloat()
+            sum += diff
+            if (diff >= SEPARATOR_DIFF_THRESHOLD) {
+                hits++
+            }
+            count++
+            y += step
+        }
+        if (count == 0) {
+            return false
+        }
+        val avg = sum / count
+        val hitRatio = hits.toFloat() / count.toFloat()
+        return avg >= SEPARATOR_AVG_THRESHOLD && hitRatio >= SEPARATOR_HIT_RATIO
+    }
+
+    private fun colorDistance(a: Int, b: Int): Int {
+        return kotlin.math.abs(android.graphics.Color.red(a) - android.graphics.Color.red(b)) +
+            kotlin.math.abs(android.graphics.Color.green(a) - android.graphics.Color.green(b)) +
+            kotlin.math.abs(android.graphics.Color.blue(a) - android.graphics.Color.blue(b))
     }
 
     private fun groupIntoLines(
@@ -1317,6 +1377,11 @@ class StateOperatorImpl @Inject constructor(
         const val MULTI_CARD_PADDED_RATIO = 0.6f
         const val MULTI_CARD_PADDED_MULTIPLIER = 1.6f
         const val A11Y_NO_MERGE_MIN_BLOCKS = 3
+        const val SEPARATOR_MIN_HEIGHT_PX = 6
+        const val SEPARATOR_SAMPLE_COUNT = 10
+        const val SEPARATOR_DIFF_THRESHOLD = 60
+        const val SEPARATOR_AVG_THRESHOLD = 50f
+        const val SEPARATOR_HIT_RATIO = 0.5f
     }
 
     private fun startTranslation(
