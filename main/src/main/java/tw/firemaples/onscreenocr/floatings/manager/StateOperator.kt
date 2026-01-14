@@ -905,7 +905,12 @@ class StateOperatorImpl @Inject constructor(
         }
 
         val fillRatio = calculateFillRatio(current.boundingBox, next.boundingBox)
-        if (fillRatio < LINE_FILL_RATIO_THRESHOLD) {
+        val requiredFillRatio = if (lineGroupSize >= MULTI_CARD_FORCE_MIN_BLOCKS) {
+            LINE_FILL_RATIO_THRESHOLD_STRICT
+        } else {
+            LINE_FILL_RATIO_THRESHOLD
+        }
+        if (fillRatio < requiredFillRatio) {
             return false
         }
         if (bitmap != null && hasVisualSeparator(current.boundingBox, next.boundingBox, bitmap)) {
@@ -1022,7 +1027,10 @@ class StateOperatorImpl @Inject constructor(
         val shortText = lengthMedian in 1f..MULTI_CARD_TEXT_LENGTH_MAX.toFloat()
         val heightConsistent = heightCv < MULTI_CARD_HEIGHT_CV
         val spacingRegular = gapCv < MULTI_CARD_GAP_CV
-        return shortText && heightConsistent && (spacingRegular || paddedRatio >= MULTI_CARD_PADDED_RATIO)
+        val forcedMultiCard = line.size >= MULTI_CARD_FORCE_MIN_BLOCKS &&
+            lengthMedian <= MULTI_CARD_TEXT_LENGTH_FORCE_MAX &&
+            heightCv < MULTI_CARD_FORCE_HEIGHT_CV
+        return forcedMultiCard || (shortText && heightConsistent && (spacingRegular || paddedRatio >= MULTI_CARD_PADDED_RATIO))
     }
 
     private fun visibleCharCount(text: String): Int {
@@ -1370,12 +1378,16 @@ class StateOperatorImpl @Inject constructor(
         const val LINE_GAP_HEIGHT_RATIO = 0.45f
         const val PARAGRAPH_GAP_HEIGHT_RATIO = 0.5f
         const val LINE_FILL_RATIO_THRESHOLD = 0.78f
+        const val LINE_FILL_RATIO_THRESHOLD_STRICT = 0.86f
         const val MULTI_CARD_LINE_MIN_BLOCKS = 4
         const val MULTI_CARD_TEXT_LENGTH_MAX = 6
         const val MULTI_CARD_HEIGHT_CV = 0.2f
         const val MULTI_CARD_GAP_CV = 0.35f
         const val MULTI_CARD_PADDED_RATIO = 0.6f
         const val MULTI_CARD_PADDED_MULTIPLIER = 1.6f
+        const val MULTI_CARD_FORCE_MIN_BLOCKS = 3
+        const val MULTI_CARD_TEXT_LENGTH_FORCE_MAX = 8f
+        const val MULTI_CARD_FORCE_HEIGHT_CV = 0.25f
         const val A11Y_NO_MERGE_MIN_BLOCKS = 3
         const val SEPARATOR_MIN_HEIGHT_PX = 6
         const val SEPARATOR_SAMPLE_COUNT = 10

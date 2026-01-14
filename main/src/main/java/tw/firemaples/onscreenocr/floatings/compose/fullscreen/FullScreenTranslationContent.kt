@@ -16,13 +16,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -51,6 +54,11 @@ fun FullScreenTranslationContent(
     val state by viewModel.state.collectAsState()
     val density = LocalDensity.current
     val swipeThreshold = with(density) { 64.dp.toPx() }
+    val translationAlpha by animateFloatAsState(
+        targetValue = if (state.showOriginal) 0f else 1f,
+        animationSpec = tween(durationMillis = 140),
+        label = "translationAlpha",
+    )
 
     LaunchedEffect(Unit) {
         val rootLocation = requestRootLocationOnScreen.invoke()
@@ -58,12 +66,6 @@ fun FullScreenTranslationContent(
             xOffset = rootLocation.left,
             yOffset = rootLocation.top,
         )
-    }
-
-    val displayBlocks = if (state.showOriginal) {
-        emptyList()
-    } else {
-        state.translatedBlocks
     }
 
     Box(
@@ -92,11 +94,12 @@ fun FullScreenTranslationContent(
                 }
             }
     ) {
-        displayBlocks.filter { it.text.isNotBlank() }.forEach { block ->
+        state.translatedBlocks.filter { it.text.isNotBlank() }.forEach { block ->
             OverlayText(
                 block = block,
                 rootOffsetX = state.rootOffset.x,
                 rootOffsetY = state.rootOffset.y,
+                alpha = translationAlpha,
             )
         }
 
@@ -128,6 +131,7 @@ private fun OverlayText(
     block: OverlayTextBlock,
     rootOffsetX: Int,
     rootOffsetY: Int,
+    alpha: Float,
 ) {
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
@@ -296,6 +300,7 @@ private fun OverlayText(
             )
             .width(expandedRect.width().pxToDp())
             .height(expandedRect.height().pxToDp())
+            .graphicsLayer(alpha = alpha)
             .background(backgroundColor, shape)
             .padding(horizontal = paddingHorizontalDp, vertical = paddingVerticalDp)
     ) {
