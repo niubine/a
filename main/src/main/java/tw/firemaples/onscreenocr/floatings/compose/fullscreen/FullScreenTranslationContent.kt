@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,13 +21,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.max
 import kotlin.math.min
-import tw.firemaples.onscreenocr.R
 import tw.firemaples.onscreenocr.floatings.compose.base.pxToDp
 import tw.firemaples.onscreenocr.floatings.manager.OverlayTextBlock
 
@@ -95,14 +93,6 @@ fun FullScreenTranslationContent(
             }
         }
 
-        Text(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp),
-            text = stringResource(id = R.string.full_screen_translation_hint),
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
     }
 }
 
@@ -113,18 +103,14 @@ private fun OverlayText(
     rootOffsetY: Int,
 ) {
     val density = LocalDensity.current
-    val padding = 2.dp
-    val paddingPx = with(density) { padding.toPx() }
-    val availableHeightPx = (block.boundingBox.height() - paddingPx * 2).coerceAtLeast(0f)
-    val calculatedFontSize = with(density) { (availableHeightPx * 0.85f).toSp() }
-    val fontSize = max(10f, min(14f, calculatedFontSize.value)).sp
+    val availableHeightPx = block.boundingBox.height().toFloat().coerceAtLeast(0f)
+    val calculatedFontSize = with(density) { (availableHeightPx * 0.65f).toSp() }
+    val fontSize = max(8f, min(14f, calculatedFontSize.value)).sp
     val textStyle = TextStyle(
         fontSize = fontSize,
         lineHeight = fontSize * 1.1f,
         color = MaterialTheme.colorScheme.onSurface,
     )
-    val backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-    val shape = RoundedCornerShape(6.dp)
 
     Box(
         modifier = Modifier
@@ -136,13 +122,11 @@ private fun OverlayText(
                 width = block.boundingBox.width().pxToDp(),
                 height = block.boundingBox.height().pxToDp(),
             )
-            .background(color = backgroundColor, shape = shape)
-            .padding(padding)
     ) {
         Text(
             text = block.text,
             style = textStyle,
-            maxLines = 3,
+            overflow = TextOverflow.Visible,
         )
     }
 }
