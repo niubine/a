@@ -135,10 +135,10 @@ dependencies {
     implementation 'pl.droidsonroids.gif:android-gif-drawable:1.2.15'
 
     // ML Kit Text Translate
-    implementation 'com.google.mlkit:translate:16.1.1'
+    implementation 'com.google.mlkit:translate:17.0.3'
 
     // ML Kit Text Recognition
-    implementation 'com.google.android.gms:play-services-mlkit-text-recognition:16.1.1'
+    implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.1'
 }
 
 apply plugin: 'com.google.gms.google-services'
