@@ -5,6 +5,7 @@ import android.graphics.Rect
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import tw.firemaples.onscreenocr.floatings.manager.OverlayTextBlock
+import tw.firemaples.onscreenocr.floatings.manager.OverlayTextSource
 import kotlin.math.roundToInt
 
 class TextAccessibilityService : AccessibilityService() {
@@ -76,6 +77,8 @@ class TextAccessibilityService : AccessibilityService() {
                 OverlayTextBlock(
                     text = content,
                     boundingBox = rect,
+                    lineCountHint = countLineBreaks(content),
+                    source = OverlayTextSource.Accessibility,
                 )
             )
             return true
@@ -88,6 +91,14 @@ class TextAccessibilityService : AccessibilityService() {
         private const val MIN_TEXT_BLOCK_DP = 8
         @Volatile
         private var instance: TextAccessibilityService? = null
+
+        private fun countLineBreaks(text: String): Int {
+            val trimmed = text.trim()
+            if (trimmed.isBlank()) {
+                return 1
+            }
+            return trimmed.count { it == '\n' } + 1
+        }
 
         fun snapshotTextBlocks(excludePackageName: String): List<OverlayTextBlock> {
             val service = instance ?: return emptyList()

@@ -38,11 +38,13 @@ import tw.firemaples.onscreenocr.utils.UIUtils
 import tw.firemaples.onscreenocr.utils.firstPart
 import tw.firemaples.onscreenocr.utils.setReusable
 import java.io.IOException
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 interface StateOperator {
     val action: SharedFlow<StateOperatorAction>
@@ -62,6 +64,10 @@ class StateOperatorImpl @Inject constructor(
     private val logger: Logger by lazy { Logger(this::class) }
 
     override val action = MutableSharedFlow<StateOperatorAction>()
+
+    private val overlayStyleExtractor = OverlayStyleExtractor(
+        context.resources.displayMetrics.density
+    )
 
     private val translationCache = object :
         LinkedHashMap<String, String>(MAX_TRANSLATION_CACHE_SIZE, 0.75f, true) {
@@ -480,6 +486,7 @@ class StateOperatorImpl @Inject constructor(
             val originalBlocks = mergeTextBlocks(
                 accessibilityBlocks = accessibilityBlocks,
                 ocrBlocks = ocrBlocks,
+                bitmap = fullBitmap,
             )
 
             stateNavigator.updateState(
@@ -536,6 +543,14 @@ class StateOperatorImpl @Inject constructor(
                 }
             }
 
+            val styledTranslatedBlocks = withContext(Dispatchers.Default) {
+                overlayStyleExtractor.applyStyles(
+                    bitmap = fullBitmap,
+                    blocks = translatedBlocks,
+                    screenRect = screenRect,
+                )
+            }
+
             FirebaseEvent.logTranslationTextFinished(translator)
 
             stateNavigator.updateState(
@@ -546,7 +561,7 @@ class StateOperatorImpl @Inject constructor(
                     recognitionResult = recognitionResult,
                     result = FullScreenTranslationResult(
                         originalBlocks = originalBlocks,
-                        translatedBlocks = translatedBlocks,
+                        translatedBlocks = styledTranslatedBlocks,
                         providerType = translator.type,
                     ),
                 )
@@ -596,6 +611,7 @@ class StateOperatorImpl @Inject constructor(
                 RecognizedTextBlock(
                     text = block.text,
                     boundingBox = scaleRect(block.boundingBox, scaleX, scaleY),
+                    lineCount = block.lineCount,
                 )
             },
         )
@@ -620,6 +636,8 @@ class StateOperatorImpl @Inject constructor(
                 OverlayTextBlock(
                     text = block.text.trim(),
                     boundingBox = block.boundingBox,
+                    lineCountHint = block.lineCount.coerceAtLeast(1),
+                    source = OverlayTextSource.Ocr,
                 )
             }
             .filter { it.text.isNotBlank() }
@@ -640,6 +658,7 @@ class StateOperatorImpl @Inject constructor(
             OverlayTextBlock(
                 text = fallbackText,
                 boundingBox = fallbackRect,
+                source = OverlayTextSource.Fallback,
             )
         )
     }
@@ -647,6 +666,7 @@ class StateOperatorImpl @Inject constructor(
     private fun mergeTextBlocks(
         accessibilityBlocks: List<OverlayTextBlock>,
         ocrBlocks: List<OverlayTextBlock>,
+        bitmap: Bitmap?,
     ): List<OverlayTextBlock> {
         val minSizePx = dpToPx(MIN_TEXT_BLOCK_DP)
         val filteredAcc = filterTextBlocks(accessibilityBlocks, minSizePx)
@@ -667,7 +687,7 @@ class StateOperatorImpl @Inject constructor(
         }
 
         val combined = filteredAcc + dedupedOcr
-        val mergedLines = mergeBlocksByLine(combined, dpToPx(MERGE_LINE_GAP_DP))
+        val mergedLines = mergeBlocksByLine(combined, dpToPx(MERGE_LINE_GAP_DP), bitmap)
         val mergedParagraphs = mergeBlocksByParagraph(
             mergedLines,
             maxGapPx = dpToPx(MERGE_PARAGRAPH_GAP_DP),
@@ -695,7 +715,9 @@ class StateOperatorImpl @Inject constructor(
             OverlayTextBlock(
                 text = text,
                 boundingBox = rect,
-                lineCountHint = countLineBreaks(text),
+                lineCountHint = max(1, block.lineCountHint),
+                source = block.source,
+                overlayStyle = block.overlayStyle,
             )
         }
     }
@@ -703,22 +725,54 @@ class StateOperatorImpl @Inject constructor(
     private fun mergeBlocksByLine(
         blocks: List<OverlayTextBlock>,
         maxGapPx: Int,
+        bitmap: Bitmap?,
     ): List<OverlayTextBlock> {
         if (blocks.isEmpty()) {
             return emptyList()
         }
 
-        val sorted = blocks.sortedWith(
-            compareBy<OverlayTextBlock> { it.boundingBox.top }
-                .thenBy { it.boundingBox.left }
-        )
         val joiner = SettingManager.textBlockJoiner.joiner
+        val lines = groupIntoLines(blocks)
         val result = mutableListOf<OverlayTextBlock>()
-        var current = sorted.first()
+        for (line in lines) {
+            if (isMultiCardRow(line)) {
+                result.addAll(line)
+                continue
+            }
+            result.addAll(
+                mergeAdjacentInLine(
+                    line = line,
+                    maxGapPx = maxGapPx,
+                    joiner = joiner,
+                    bitmap = bitmap,
+                )
+            )
+        }
+        return result
+    }
 
-        for (next in sorted.drop(1)) {
-            if (isSameLine(current.boundingBox, next.boundingBox) &&
-                gapBetween(current.boundingBox, next.boundingBox) <= maxGapPx
+    private fun mergeAdjacentInLine(
+        line: List<OverlayTextBlock>,
+        maxGapPx: Int,
+        joiner: String,
+        bitmap: Bitmap?,
+    ): List<OverlayTextBlock> {
+        if (line.isEmpty()) {
+            return emptyList()
+        }
+
+        val result = mutableListOf<OverlayTextBlock>()
+        var current = line.first()
+        val lineSize = line.size
+
+        for (next in line.drop(1)) {
+            if (shouldMergeHorizontally(
+                    current = current,
+                    next = next,
+                    maxGapPx = maxGapPx,
+                    lineGroupSize = lineSize,
+                    bitmap = bitmap,
+                )
             ) {
                 val mergedText = listOf(current.text, next.text)
                     .filter { it.isNotBlank() }
@@ -728,7 +782,8 @@ class StateOperatorImpl @Inject constructor(
                 current = OverlayTextBlock(
                     text = mergedText,
                     boundingBox = mergedRect,
-                    lineCountHint = countLineBreaks(mergedText),
+                    lineCountHint = max(current.lineCountHint, next.lineCountHint),
+                    source = mergeSources(current.source, next.source),
                 )
             } else {
                 result.add(current)
@@ -766,7 +821,8 @@ class StateOperatorImpl @Inject constructor(
                 current = OverlayTextBlock(
                     text = mergedText,
                     boundingBox = mergedRect,
-                    lineCountHint = countLineBreaks(mergedText),
+                    lineCountHint = max(1, current.lineCountHint) + max(1, next.lineCountHint),
+                    source = mergeSources(current.source, next.source),
                 )
             } else {
                 result.add(current)
@@ -789,6 +845,11 @@ class StateOperatorImpl @Inject constructor(
         }
         val gap = b.top - a.bottom
         if (gap < 0 || gap > maxGapPx) {
+            return false
+        }
+        val minHeight = min(a.height(), b.height()).toFloat()
+        val dynamicGap = (minHeight * PARAGRAPH_GAP_HEIGHT_RATIO).roundToInt()
+        if (gap > min(maxGapPx, dynamicGap)) {
             return false
         }
 
@@ -818,6 +879,205 @@ class StateOperatorImpl @Inject constructor(
 
     private fun gapBetween(a: Rect, b: Rect): Int {
         return max(0, b.left - a.right)
+    }
+
+    private fun shouldMergeHorizontally(
+        current: OverlayTextBlock,
+        next: OverlayTextBlock,
+        maxGapPx: Int,
+        lineGroupSize: Int,
+        bitmap: Bitmap?,
+    ): Boolean {
+        if (!isSameLine(current.boundingBox, next.boundingBox)) {
+            return false
+        }
+        if (lineGroupSize >= A11Y_NO_MERGE_MIN_BLOCKS &&
+            current.source == OverlayTextSource.Accessibility &&
+            next.source == OverlayTextSource.Accessibility
+        ) {
+            return false
+        }
+        val gap = gapBetween(current.boundingBox, next.boundingBox)
+        val minHeight = min(current.boundingBox.height(), next.boundingBox.height()).toFloat()
+        val dynamicGap = (minHeight * LINE_GAP_HEIGHT_RATIO).roundToInt()
+        if (gap > min(maxGapPx, dynamicGap)) {
+            return false
+        }
+
+        val fillRatio = calculateFillRatio(current.boundingBox, next.boundingBox)
+        val requiredFillRatio = if (lineGroupSize >= MULTI_CARD_FORCE_MIN_BLOCKS) {
+            LINE_FILL_RATIO_THRESHOLD_STRICT
+        } else {
+            LINE_FILL_RATIO_THRESHOLD
+        }
+        if (fillRatio < requiredFillRatio) {
+            return false
+        }
+        if (bitmap != null && hasVisualSeparator(current.boundingBox, next.boundingBox, bitmap)) {
+            return false
+        }
+        return true
+    }
+
+    private fun calculateFillRatio(a: Rect, b: Rect): Float {
+        val union = Rect(a)
+        union.union(b)
+        val unionArea = union.width() * union.height()
+        if (unionArea <= 0) {
+            return 0f
+        }
+        val areaSum = (a.width() * a.height()) + (b.width() * b.height())
+        return areaSum.toFloat() / unionArea.toFloat()
+    }
+
+    private fun hasVisualSeparator(a: Rect, b: Rect, bitmap: Bitmap): Boolean {
+        val overlapTop = max(a.top, b.top).coerceAtLeast(0)
+        val overlapBottom = min(a.bottom, b.bottom).coerceAtMost(bitmap.height - 1)
+        val overlapHeight = overlapBottom - overlapTop
+        if (overlapHeight < SEPARATOR_MIN_HEIGHT_PX) {
+            return false
+        }
+
+        val gap = gapBetween(a, b)
+        var leftX = (a.right - 1).coerceIn(0, bitmap.width - 1)
+        var rightX = (b.left + 1).coerceIn(0, bitmap.width - 1)
+        if (gap <= 0 || leftX >= rightX) {
+            val boundary = ((a.right + b.left) / 2).coerceIn(1, bitmap.width - 2)
+            leftX = boundary - 1
+            rightX = boundary + 1
+        }
+
+        val step = max(1, overlapHeight / SEPARATOR_SAMPLE_COUNT)
+        var y = overlapTop
+        var sum = 0f
+        var hits = 0
+        var count = 0
+        while (y <= overlapBottom) {
+            val cLeft = bitmap.getPixel(leftX, y)
+            val cRight = bitmap.getPixel(rightX, y)
+            val diff = colorDistance(cLeft, cRight).toFloat()
+            sum += diff
+            if (diff >= SEPARATOR_DIFF_THRESHOLD) {
+                hits++
+            }
+            count++
+            y += step
+        }
+        if (count == 0) {
+            return false
+        }
+        val avg = sum / count
+        val hitRatio = hits.toFloat() / count.toFloat()
+        return avg >= SEPARATOR_AVG_THRESHOLD && hitRatio >= SEPARATOR_HIT_RATIO
+    }
+
+    private fun colorDistance(a: Int, b: Int): Int {
+        return kotlin.math.abs(android.graphics.Color.red(a) - android.graphics.Color.red(b)) +
+            kotlin.math.abs(android.graphics.Color.green(a) - android.graphics.Color.green(b)) +
+            kotlin.math.abs(android.graphics.Color.blue(a) - android.graphics.Color.blue(b))
+    }
+
+    private fun groupIntoLines(
+        blocks: List<OverlayTextBlock>,
+    ): List<List<OverlayTextBlock>> {
+        val sorted = blocks.sortedWith(
+            compareBy<OverlayTextBlock> { it.boundingBox.top }
+                .thenBy { it.boundingBox.left }
+        )
+        val lines = mutableListOf<MutableList<OverlayTextBlock>>()
+        for (block in sorted) {
+            val target = lines.firstOrNull { line ->
+                isSameLine(line.first().boundingBox, block.boundingBox)
+            }
+            if (target == null) {
+                lines.add(mutableListOf(block))
+            } else {
+                target.add(block)
+            }
+        }
+        return lines.map { line -> line.sortedBy { it.boundingBox.left } }
+    }
+
+    private fun isMultiCardRow(line: List<OverlayTextBlock>): Boolean {
+        if (line.size < MULTI_CARD_LINE_MIN_BLOCKS) {
+            return false
+        }
+
+        val heights = line.map { it.boundingBox.height().toFloat() }
+        val heightCv = coefficientOfVariation(heights)
+
+        val lengths = line.map { visibleCharCount(it.text).toFloat() }
+            .filter { it > 0f }
+        val lengthMedian = if (lengths.isEmpty()) 0f else median(lengths)
+
+        val gaps = line.zipWithNext { a, b ->
+            max(0, b.boundingBox.left - a.boundingBox.right).toFloat()
+        }
+        val positiveGaps = gaps.filter { it > 0f }
+        val gapCv = if (positiveGaps.size >= 2) coefficientOfVariation(positiveGaps) else 1f
+
+        val widthPerChar = line.map { block ->
+            val count = max(1, visibleCharCount(block.text))
+            block.boundingBox.width().toFloat() / count.toFloat()
+        }
+        val widthPerCharMedian = median(widthPerChar)
+        val paddedRatio = widthPerChar.count { it > widthPerCharMedian * MULTI_CARD_PADDED_MULTIPLIER }
+            .toFloat() / line.size.toFloat()
+
+        val shortText = lengthMedian in 1f..MULTI_CARD_TEXT_LENGTH_MAX.toFloat()
+        val heightConsistent = heightCv < MULTI_CARD_HEIGHT_CV
+        val spacingRegular = gapCv < MULTI_CARD_GAP_CV
+        val forcedMultiCard = line.size >= MULTI_CARD_FORCE_MIN_BLOCKS &&
+            lengthMedian <= MULTI_CARD_TEXT_LENGTH_FORCE_MAX &&
+            heightCv < MULTI_CARD_FORCE_HEIGHT_CV
+        return forcedMultiCard || (shortText && heightConsistent && (spacingRegular || paddedRatio >= MULTI_CARD_PADDED_RATIO))
+    }
+
+    private fun visibleCharCount(text: String): Int {
+        return text.count { !it.isWhitespace() }
+    }
+
+    private fun coefficientOfVariation(values: List<Float>): Float {
+        if (values.isEmpty()) {
+            return 0f
+        }
+        val mean = values.sum() / values.size
+        if (mean == 0f) {
+            return 0f
+        }
+        var sumSq = 0f
+        values.forEach { value ->
+            val diff = value - mean
+            sumSq += diff * diff
+        }
+        val variance = sumSq / values.size
+        return sqrt(variance) / mean
+    }
+
+    private fun median(values: List<Float>): Float {
+        if (values.isEmpty()) {
+            return 0f
+        }
+        val sorted = values.sorted()
+        val mid = sorted.size / 2
+        return if (sorted.size % 2 == 0) {
+            (sorted[mid - 1] + sorted[mid]) / 2f
+        } else {
+            sorted[mid]
+        }
+    }
+
+    private fun mergeSources(a: OverlayTextSource, b: OverlayTextSource): OverlayTextSource {
+        if (a == b) {
+            return a
+        }
+        if (a == OverlayTextSource.Unknown) {
+            return b
+        }
+        if (b == OverlayTextSource.Unknown) {
+            return a
+        }
+        return OverlayTextSource.Mixed
     }
 
     private fun calculateIoU(a: Rect, b: Rect): Float {
@@ -874,20 +1134,21 @@ class StateOperatorImpl @Inject constructor(
         originalBlocks: List<OverlayTextBlock>,
         fallbackRect: Rect,
     ): BlockTranslationResult {
-        val delimiter = "?"
-        val mergedText = originalBlocks.joinToString(separator = delimiter) { it.text }
+        val delimiterToken = "<<<OCR_BLOCK_${UUID.randomUUID()}>>>"
+        val mergedText = originalBlocks.joinToString(separator = "\n$delimiterToken\n") { it.text }
 
         return when (val translationResult = translator.translate(
             text = mergedText,
             sourceLangCode = sourceLangCode,
         )) {
             is TranslationResult.TranslatedResult -> {
+                val pieces = splitTranslatedText(translationResult.result, delimiterToken)
                 BlockTranslationResult.Success(
                     buildTranslatedBlocks(
-                        translatedText = translationResult.result,
+                        pieces = pieces,
                         originalBlocks = originalBlocks,
                         fallbackRect = fallbackRect,
-                        delimiter = delimiter,
+                        fallbackText = translationResult.result,
                     )
                 )
             }
@@ -929,6 +1190,7 @@ class StateOperatorImpl @Inject constructor(
                     text = block.text,
                     boundingBox = block.boundingBox,
                     lineCountHint = block.lineCountHint,
+                    source = block.source,
                 )
             }
             return BlockTranslationResult.Success(translatedBlocks)
@@ -999,6 +1261,7 @@ class StateOperatorImpl @Inject constructor(
                 text = finalTexts[index],
                 boundingBox = block.boundingBox,
                 lineCountHint = block.lineCountHint,
+                source = block.source,
             )
         }
         return BlockTranslationResult.Success(translatedBlocks)
@@ -1058,35 +1321,43 @@ class StateOperatorImpl @Inject constructor(
         }
     }
 
+    private fun splitTranslatedText(
+        translatedText: String,
+        delimiterToken: String,
+    ): List<String> {
+        val delimiterRegex = Regex("\\s*${Regex.escape(delimiterToken)}\\s*")
+        return translatedText.split(delimiterRegex)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+    }
+
     private fun dpToPx(dp: Int): Int {
         val density = context.resources.displayMetrics.density
         return (dp * density).roundToInt()
     }
 
     private fun buildTranslatedBlocks(
-        translatedText: String,
+        pieces: List<String>,
         originalBlocks: List<OverlayTextBlock>,
         fallbackRect: Rect,
-        delimiter: String,
+        fallbackText: String,
     ): List<OverlayTextBlock> {
-        val pieces = translatedText.split(delimiter)
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-
         return if (pieces.size == originalBlocks.size) {
             originalBlocks.mapIndexed { index, block ->
                 OverlayTextBlock(
                     text = pieces[index],
                     boundingBox = block.boundingBox,
                     lineCountHint = block.lineCountHint,
+                    source = block.source,
                 )
             }
         } else {
             listOf(
                 OverlayTextBlock(
-                    text = translatedText.trim(),
+                    text = fallbackText.trim(),
                     boundingBox = fallbackRect,
-                    lineCountHint = countLineBreaks(translatedText),
+                    lineCountHint = countLineBreaks(fallbackText),
+                    source = OverlayTextSource.Fallback,
                 )
             )
         }
@@ -1104,6 +1375,25 @@ class StateOperatorImpl @Inject constructor(
         const val IOU_THRESHOLD = 0.7f
         const val LINE_OVERLAP_THRESHOLD = 0.6f
         const val PARAGRAPH_OVERLAP_THRESHOLD = 0.6f
+        const val LINE_GAP_HEIGHT_RATIO = 0.45f
+        const val PARAGRAPH_GAP_HEIGHT_RATIO = 0.5f
+        const val LINE_FILL_RATIO_THRESHOLD = 0.78f
+        const val LINE_FILL_RATIO_THRESHOLD_STRICT = 0.86f
+        const val MULTI_CARD_LINE_MIN_BLOCKS = 4
+        const val MULTI_CARD_TEXT_LENGTH_MAX = 6
+        const val MULTI_CARD_HEIGHT_CV = 0.2f
+        const val MULTI_CARD_GAP_CV = 0.35f
+        const val MULTI_CARD_PADDED_RATIO = 0.6f
+        const val MULTI_CARD_PADDED_MULTIPLIER = 1.6f
+        const val MULTI_CARD_FORCE_MIN_BLOCKS = 3
+        const val MULTI_CARD_TEXT_LENGTH_FORCE_MAX = 8f
+        const val MULTI_CARD_FORCE_HEIGHT_CV = 0.25f
+        const val A11Y_NO_MERGE_MIN_BLOCKS = 3
+        const val SEPARATOR_MIN_HEIGHT_PX = 6
+        const val SEPARATOR_SAMPLE_COUNT = 10
+        const val SEPARATOR_DIFF_THRESHOLD = 60
+        const val SEPARATOR_AVG_THRESHOLD = 50f
+        const val SEPARATOR_HIT_RATIO = 0.5f
     }
 
     private fun startTranslation(
