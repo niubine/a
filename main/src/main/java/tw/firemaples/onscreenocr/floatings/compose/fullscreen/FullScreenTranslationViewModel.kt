@@ -97,10 +97,12 @@ class FullScreenTranslationViewModelImpl @Inject constructor(
             }
 
             is NavState.FullScreenTextTranslating -> {
-                val originalBlocks = buildOriginalBlocks(
-                    recognitionResult = navState.recognitionResult,
-                    fallbackRect = navState.selectedRect,
-                )
+                val originalBlocks = navState.originalBlocks.ifEmpty {
+                    buildOriginalBlocks(
+                        recognitionResult = navState.recognitionResult,
+                        fallbackRect = navState.selectedRect,
+                    )
+                }
                 state.update {
                     it.copy(
                         isProcessing = true,

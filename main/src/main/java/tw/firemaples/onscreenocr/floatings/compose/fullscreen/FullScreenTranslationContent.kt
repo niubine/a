@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -18,11 +19,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tw.firemaples.onscreenocr.R
@@ -46,8 +49,8 @@ fun FullScreenTranslationContent(
         )
     }
 
-    val displayBlocks = if (state.showOriginal || state.translatedBlocks.isEmpty()) {
-        state.originalBlocks
+    val displayBlocks = if (state.showOriginal) {
+        emptyList()
     } else {
         state.translatedBlocks
     }
@@ -86,7 +89,7 @@ fun FullScreenTranslationContent(
             )
         }
 
-        if (state.isProcessing) {
+        if (state.isProcessing && !state.showOriginal) {
             Box(
                 modifier = Modifier
                     .fillMaxSize(),
@@ -96,14 +99,16 @@ fun FullScreenTranslationContent(
             }
         }
 
-        Text(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp),
-            text = stringResource(id = R.string.full_screen_translation_hint),
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+        if (!state.showOriginal) {
+            Text(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 32.dp),
+                text = stringResource(id = R.string.full_screen_translation_hint),
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
     }
 }
 
@@ -113,10 +118,17 @@ private fun OverlayText(
     rootOffsetX: Int,
     rootOffsetY: Int,
 ) {
+    val density = LocalDensity.current
+    val minFontSizePx = with(density) { 10.sp.toPx() }
+    val maxFontSizePx = with(density) { 18.sp.toPx() }
+    val targetFontSizePx = (block.boundingBox.height() * 0.6f)
+        .coerceIn(minFontSizePx, maxFontSizePx)
     val textStyle = TextStyle(
-        fontSize = 14.sp,
-        color = MaterialTheme.colorScheme.onSurface,
+        fontSize = with(density) { targetFontSizePx.toSp() },
+        color = Color.White,
     )
+    val shape = RoundedCornerShape(4.dp)
+    val backgroundColor = Color(0xCC000000)
 
     Box(
         modifier = Modifier
@@ -128,10 +140,15 @@ private fun OverlayText(
                 width = block.boundingBox.width().pxToDp(),
                 height = block.boundingBox.height().pxToDp(),
             )
+            .clip(shape)
+            .background(backgroundColor)
+            .padding(horizontal = 4.dp, vertical = 2.dp)
     ) {
         Text(
             text = block.text,
             style = textStyle,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
