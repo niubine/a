@@ -153,7 +153,7 @@ class FullScreenTranslationViewModelImpl @Inject constructor(
             OverlayTextBlock(
                 text = block.text,
                 boundingBox = block.boundingBox,
-                lineCountHint = countLineBreaks(block.text),
+                lineCountHint = block.lineCount.coerceAtLeast(1),
             )
         }
     }

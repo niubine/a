@@ -111,6 +111,7 @@ class GoogleMLKitTextRecognizer : TextRecognizer {
                         RecognizedTextBlock(
                             text = formatBlockText(block.getText(rtl)),
                             boundingBox = boundingBox,
+                            lineCount = block.lines.size.coerceAtLeast(1),
                         )
                     }
 

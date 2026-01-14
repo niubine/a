@@ -38,6 +38,7 @@ import tw.firemaples.onscreenocr.utils.UIUtils
 import tw.firemaples.onscreenocr.utils.firstPart
 import tw.firemaples.onscreenocr.utils.setReusable
 import java.io.IOException
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
@@ -62,6 +63,10 @@ class StateOperatorImpl @Inject constructor(
     private val logger: Logger by lazy { Logger(this::class) }
 
     override val action = MutableSharedFlow<StateOperatorAction>()
+
+    private val overlayStyleExtractor = OverlayStyleExtractor(
+        context.resources.displayMetrics.density
+    )
 
     private val translationCache = object :
         LinkedHashMap<String, String>(MAX_TRANSLATION_CACHE_SIZE, 0.75f, true) {
@@ -536,6 +541,14 @@ class StateOperatorImpl @Inject constructor(
                 }
             }
 
+            val styledTranslatedBlocks = withContext(Dispatchers.Default) {
+                overlayStyleExtractor.applyStyles(
+                    bitmap = fullBitmap,
+                    blocks = translatedBlocks,
+                    screenRect = screenRect,
+                )
+            }
+
             FirebaseEvent.logTranslationTextFinished(translator)
 
             stateNavigator.updateState(
@@ -546,7 +559,7 @@ class StateOperatorImpl @Inject constructor(
                     recognitionResult = recognitionResult,
                     result = FullScreenTranslationResult(
                         originalBlocks = originalBlocks,
-                        translatedBlocks = translatedBlocks,
+                        translatedBlocks = styledTranslatedBlocks,
                         providerType = translator.type,
                     ),
                 )
@@ -596,6 +609,7 @@ class StateOperatorImpl @Inject constructor(
                 RecognizedTextBlock(
                     text = block.text,
                     boundingBox = scaleRect(block.boundingBox, scaleX, scaleY),
+                    lineCount = block.lineCount,
                 )
             },
         )
@@ -620,6 +634,7 @@ class StateOperatorImpl @Inject constructor(
                 OverlayTextBlock(
                     text = block.text.trim(),
                     boundingBox = block.boundingBox,
+                    lineCountHint = block.lineCount.coerceAtLeast(1),
                 )
             }
             .filter { it.text.isNotBlank() }
@@ -695,7 +710,7 @@ class StateOperatorImpl @Inject constructor(
             OverlayTextBlock(
                 text = text,
                 boundingBox = rect,
-                lineCountHint = countLineBreaks(text),
+                lineCountHint = max(1, block.lineCountHint),
             )
         }
     }
@@ -728,7 +743,7 @@ class StateOperatorImpl @Inject constructor(
                 current = OverlayTextBlock(
                     text = mergedText,
                     boundingBox = mergedRect,
-                    lineCountHint = countLineBreaks(mergedText),
+                    lineCountHint = max(current.lineCountHint, next.lineCountHint),
                 )
             } else {
                 result.add(current)
@@ -766,7 +781,7 @@ class StateOperatorImpl @Inject constructor(
                 current = OverlayTextBlock(
                     text = mergedText,
                     boundingBox = mergedRect,
-                    lineCountHint = countLineBreaks(mergedText),
+                    lineCountHint = max(1, current.lineCountHint) + max(1, next.lineCountHint),
                 )
             } else {
                 result.add(current)
@@ -874,20 +889,21 @@ class StateOperatorImpl @Inject constructor(
         originalBlocks: List<OverlayTextBlock>,
         fallbackRect: Rect,
     ): BlockTranslationResult {
-        val delimiter = "?"
-        val mergedText = originalBlocks.joinToString(separator = delimiter) { it.text }
+        val delimiterToken = "<<<OCR_BLOCK_${UUID.randomUUID()}>>>"
+        val mergedText = originalBlocks.joinToString(separator = "\n$delimiterToken\n") { it.text }
 
         return when (val translationResult = translator.translate(
             text = mergedText,
             sourceLangCode = sourceLangCode,
         )) {
             is TranslationResult.TranslatedResult -> {
+                val pieces = splitTranslatedText(translationResult.result, delimiterToken)
                 BlockTranslationResult.Success(
                     buildTranslatedBlocks(
-                        translatedText = translationResult.result,
+                        pieces = pieces,
                         originalBlocks = originalBlocks,
                         fallbackRect = fallbackRect,
-                        delimiter = delimiter,
+                        fallbackText = translationResult.result,
                     )
                 )
             }
@@ -1058,21 +1074,27 @@ class StateOperatorImpl @Inject constructor(
         }
     }
 
+    private fun splitTranslatedText(
+        translatedText: String,
+        delimiterToken: String,
+    ): List<String> {
+        val delimiterRegex = Regex("\\s*${Regex.escape(delimiterToken)}\\s*")
+        return translatedText.split(delimiterRegex)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+    }
+
     private fun dpToPx(dp: Int): Int {
         val density = context.resources.displayMetrics.density
         return (dp * density).roundToInt()
     }
 
     private fun buildTranslatedBlocks(
-        translatedText: String,
+        pieces: List<String>,
         originalBlocks: List<OverlayTextBlock>,
         fallbackRect: Rect,
-        delimiter: String,
+        fallbackText: String,
     ): List<OverlayTextBlock> {
-        val pieces = translatedText.split(delimiter)
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-
         return if (pieces.size == originalBlocks.size) {
             originalBlocks.mapIndexed { index, block ->
                 OverlayTextBlock(
@@ -1084,9 +1106,9 @@ class StateOperatorImpl @Inject constructor(
         } else {
             listOf(
                 OverlayTextBlock(
-                    text = translatedText.trim(),
+                    text = fallbackText.trim(),
                     boundingBox = fallbackRect,
-                    lineCountHint = countLineBreaks(translatedText),
+                    lineCountHint = countLineBreaks(fallbackText),
                 )
             )
         }

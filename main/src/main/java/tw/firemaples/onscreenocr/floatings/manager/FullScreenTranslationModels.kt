@@ -7,7 +7,27 @@ data class OverlayTextBlock(
     val text: String,
     val boundingBox: Rect,
     val lineCountHint: Int = 1,
+    val overlayStyle: OverlayStyle? = null,
 )
+
+data class OverlayStyle(
+    val bgColorArgb: Int,
+    val fgColorArgb: Int,
+    val bgAlpha: Float,
+    val useBlurBg: Boolean,
+    val shadowColorArgb: Int? = null,
+    val shadowRadiusDp: Float = 0f,
+    val targetFontPx: Float,
+    val layoutType: LayoutType,
+)
+
+enum class LayoutType {
+    Subtitle,
+    Bubble,
+    Label,
+    Paragraph,
+    Unknown,
+}
 
 data class FullScreenTranslationResult(
     val originalBlocks: List<OverlayTextBlock>,

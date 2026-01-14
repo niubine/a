@@ -22,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tw.firemaples.onscreenocr.R
 import tw.firemaples.onscreenocr.floatings.compose.base.pxToDp
+import tw.firemaples.onscreenocr.floatings.manager.LayoutType
 import tw.firemaples.onscreenocr.floatings.manager.OverlayTextBlock
 import kotlin.math.max
 import kotlin.math.min
@@ -131,18 +134,27 @@ private fun OverlayText(
     val rawPaddingVerticalPx = with(density) { 2.dp.toPx() }
     val boxWidthPx = block.boundingBox.width().toFloat()
     val boxHeightPx = block.boundingBox.height().toFloat()
-    val paddingHorizontalPx = min(rawPaddingHorizontalPx, boxWidthPx * PADDING_WIDTH_RATIO)
-    val paddingVerticalPx = min(rawPaddingVerticalPx, boxHeightPx * PADDING_HEIGHT_RATIO)
+    val style = block.overlayStyle
+    val layoutType = style?.layoutType ?: LayoutType.Unknown
+    val paddingScale = when (layoutType) {
+        LayoutType.Subtitle -> 1.15f
+        LayoutType.Bubble -> 1.1f
+        LayoutType.Label -> 0.9f
+        LayoutType.Paragraph -> 1.05f
+        LayoutType.Unknown -> 1f
+    }
+    val paddingHorizontalPx =
+        min(rawPaddingHorizontalPx, boxWidthPx * PADDING_WIDTH_RATIO) * paddingScale
+    val paddingVerticalPx =
+        min(rawPaddingVerticalPx, boxHeightPx * PADDING_HEIGHT_RATIO) * paddingScale
     val availableWidthPx = max(1f, boxWidthPx - paddingHorizontalPx * 2f)
     val availableHeightPx = max(1f, boxHeightPx - paddingVerticalPx * 2f)
     val lineCountHint = max(1, block.lineCountHint)
-    val maxFontSizePx = max(
-        1f,
-        min(
-            with(density) { MAX_FONT_SP.sp.toPx() },
-            (availableHeightPx / lineCountHint) / LINE_HEIGHT_MULTIPLIER,
-        ),
-    )
+    val maxFontSizeFromBoxPx =
+        max(1f, (availableHeightPx / lineCountHint) / LINE_HEIGHT_MULTIPLIER)
+    val cappedMaxFontPx = min(with(density) { MAX_FONT_SP.sp.toPx() }, maxFontSizeFromBoxPx)
+    val targetFontPx = style?.targetFontPx ?: cappedMaxFontPx
+    val maxFontSizePx = max(1f, min(targetFontPx, maxFontSizeFromBoxPx))
     val minFontSizePx = max(
         1f,
         min(
@@ -157,6 +169,8 @@ private fun OverlayText(
         availableWidthPx,
         availableHeightPx,
         lineCountHint,
+        maxFontSizePx,
+        minFontSizePx,
         densityValue,
         fontScale,
     ) {
@@ -174,13 +188,32 @@ private fun OverlayText(
     val fontSizeSp = with(density) { fittedText.fontSizePx.toSp() }
     val lineHeightSp = fontSizeSp * LINE_HEIGHT_MULTIPLIER
     val maxLines = max(1, fittedText.layoutResult.lineCount)
+    val shadow = style?.let { resolvedStyle ->
+        resolvedStyle.shadowColorArgb?.let { color ->
+            Shadow(
+                color = Color(color),
+                offset = Offset.Zero,
+                blurRadius = with(density) { resolvedStyle.shadowRadiusDp.dp.toPx() },
+            )
+        }
+    }
     val textStyle = TextStyle(
         fontSize = fontSizeSp,
         lineHeight = lineHeightSp,
-        color = Color.White,
+        color = style?.fgColorArgb?.let { Color(it) } ?: Color.White,
+        shadow = shadow,
     )
-    val shape = RoundedCornerShape(4.dp)
-    val backgroundColor = Color(0xCC000000)
+    val cornerRadius = when (layoutType) {
+        LayoutType.Bubble -> 8.dp
+        LayoutType.Label -> 6.dp
+        LayoutType.Subtitle -> 4.dp
+        LayoutType.Paragraph -> 4.dp
+        LayoutType.Unknown -> 4.dp
+    }
+    val shape = RoundedCornerShape(cornerRadius)
+    val backgroundColor = style?.let {
+        Color(it.bgColorArgb).copy(alpha = it.bgAlpha)
+    } ?: Color(0xCC000000)
     val paddingHorizontalDp = with(density) { paddingHorizontalPx.toDp() }
     val paddingVerticalDp = with(density) { paddingVerticalPx.toDp() }
 

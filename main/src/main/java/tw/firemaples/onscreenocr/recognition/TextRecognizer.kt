@@ -118,4 +118,5 @@ data class RecognitionResult(
 data class RecognizedTextBlock(
     val text: String,
     val boundingBox: Rect,
+    val lineCount: Int = 1,
 )
