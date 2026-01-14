@@ -97,7 +97,11 @@ class OverlayStyleExtractor(
         )
 
         val bgComplex = bgVariance > COMPLEX_BG_VARIANCE
-        val bgAlpha = resolveBackgroundAlpha(layoutType, bgComplex)
+        val bgAlpha = if (bgVariance <= SOLID_BG_VARIANCE) {
+            1f
+        } else {
+            resolveBackgroundAlpha(layoutType, bgComplex)
+        }
         val useBlurBg = false
 
         val baseFontPx = max(
@@ -373,7 +377,8 @@ class OverlayStyleExtractor(
         const val LABEL_HEIGHT_RATIO = 0.12f
         const val PARAGRAPH_HEIGHT_RATIO = 0.2f
         const val MIN_CONTRAST_RATIO = 4.5f
-        const val COMPLEX_BG_ALPHA = 0.85f
+        const val COMPLEX_BG_ALPHA = 0.9f
+        const val SOLID_BG_VARIANCE = 0.004f
         const val RING_VARIANCE_MULTIPLIER = 1.6f
         const val BG_COLOR_DISTANCE_THRESHOLD = 72
         const val LINE_HEIGHT_MULTIPLIER = 1.15f
