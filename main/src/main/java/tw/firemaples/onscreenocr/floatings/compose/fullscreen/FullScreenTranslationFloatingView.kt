@@ -13,6 +13,9 @@ class FullScreenTranslationFloatingView @Inject constructor(
     private val viewModel: FullScreenTranslationViewModel,
 ) : ComposeFloatingView(context) {
 
+    override val fullscreenMode: Boolean
+        get() = true
+
     override val layoutWidth: Int
         get() = WindowManager.LayoutParams.MATCH_PARENT
 
