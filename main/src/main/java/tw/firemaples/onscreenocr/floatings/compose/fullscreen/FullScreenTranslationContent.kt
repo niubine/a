@@ -26,6 +26,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.max
+import kotlin.math.min
 import tw.firemaples.onscreenocr.R
 import tw.firemaples.onscreenocr.floatings.compose.base.pxToDp
 import tw.firemaples.onscreenocr.floatings.manager.OverlayTextBlock
@@ -115,7 +117,7 @@ private fun OverlayText(
     val paddingPx = with(density) { padding.toPx() }
     val availableHeightPx = (block.boundingBox.height() - paddingPx * 2).coerceAtLeast(0f)
     val calculatedFontSize = with(density) { (availableHeightPx * 0.85f).toSp() }
-    val fontSize = maxOf(10.sp, minOf(14.sp, calculatedFontSize))
+    val fontSize = max(10f, min(14f, calculatedFontSize.value)).sp
     val textStyle = TextStyle(
         fontSize = fontSize,
         lineHeight = fontSize * 1.1f,
