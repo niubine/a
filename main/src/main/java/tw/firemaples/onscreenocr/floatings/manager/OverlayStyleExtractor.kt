@@ -65,18 +65,16 @@ class OverlayStyleExtractor(
             skipRect = rect,
             maxSamples = MAX_SAMPLES,
         )
-        val backgroundStats = if (ringStats.count >= MIN_BG_SAMPLES) {
-            ringStats
-        } else {
-            collectStats(
-                pixels = pixels,
-                bitmapWidth = bitmapWidth,
-                rect = rect,
-                step = SAMPLE_STEP_PX,
-                skipRect = null,
-                maxSamples = MAX_SAMPLES,
-            )
-        }
+        val innerStats = collectStats(
+            pixels = pixels,
+            bitmapWidth = bitmapWidth,
+            rect = rect,
+            step = SAMPLE_STEP_PX,
+            skipRect = null,
+            maxSamples = MAX_SAMPLES,
+        )
+        val useInnerStats = shouldUseInnerBackground(ringStats, innerStats)
+        val backgroundStats = if (useInnerStats) innerStats else ringStats
 
         val bgColor = backgroundStats.dominantColor()
         val bgLuma = backgroundStats.lumaMean()
@@ -100,32 +98,21 @@ class OverlayStyleExtractor(
 
         val bgComplex = bgVariance > COMPLEX_BG_VARIANCE
         val bgAlpha = resolveBackgroundAlpha(layoutType, bgComplex)
-        val useBlurBg = bgComplex
+        val useBlurBg = false
 
-        val contrast = contrastRatio(fgColor, bgColor)
-        val shadowColor = if (bgComplex || layoutType == LayoutType.Subtitle || contrast < MIN_CONTRAST_RATIO) {
-            val shadowBase = if (bgLuma > 0.5f) Color.BLACK else Color.WHITE
-            applyAlpha(shadowBase, SHADOW_ALPHA)
-        } else {
-            null
-        }
-        val shadowRadius = when (layoutType) {
-            LayoutType.Subtitle -> SHADOW_RADIUS_SUBTITLE_DP
-            else -> if (shadowColor != null) SHADOW_RADIUS_DP else 0f
-        }
-
-        val targetFontPx = max(
+        val baseFontPx = max(
             1f,
             (rect.height().toFloat() / max(1, block.lineCountHint)) / LINE_HEIGHT_MULTIPLIER,
         )
+        val targetFontPx = baseFontPx * resolveFontScale(layoutType)
 
         return OverlayStyle(
             bgColorArgb = bgColor,
             fgColorArgb = fgColor,
             bgAlpha = bgAlpha,
             useBlurBg = useBlurBg,
-            shadowColorArgb = shadowColor,
-            shadowRadiusDp = shadowRadius,
+            shadowColorArgb = null,
+            shadowRadiusDp = 0f,
             targetFontPx = targetFontPx,
             layoutType = layoutType,
         )
@@ -206,17 +193,13 @@ class OverlayStyleExtractor(
 
     private fun resolveBackgroundAlpha(layoutType: LayoutType, bgComplex: Boolean): Float {
         val baseAlpha = when (layoutType) {
-            LayoutType.Subtitle -> 0.35f
-            LayoutType.Bubble -> 0.95f
-            LayoutType.Label -> 0.9f
-            LayoutType.Paragraph -> 0.75f
-            LayoutType.Unknown -> 0.8f
+            LayoutType.Subtitle -> 0.6f
+            LayoutType.Bubble -> 0.98f
+            LayoutType.Label -> 0.95f
+            LayoutType.Paragraph -> 0.85f
+            LayoutType.Unknown -> 0.85f
         }
-        return if (bgComplex && layoutType != LayoutType.Bubble && layoutType != LayoutType.Label) {
-            min(baseAlpha, 0.6f)
-        } else {
-            baseAlpha
-        }
+        return if (bgComplex) max(baseAlpha, COMPLEX_BG_ALPHA) else baseAlpha
     }
 
     private fun classifyLayoutType(
@@ -246,6 +229,39 @@ class OverlayStyleExtractor(
         }
     }
 
+    private fun resolveFontScale(layoutType: LayoutType): Float {
+        return when (layoutType) {
+            LayoutType.Subtitle -> 1.05f
+            LayoutType.Bubble -> 1.03f
+            LayoutType.Label -> 1.08f
+            LayoutType.Paragraph -> 1.0f
+            LayoutType.Unknown -> 1.0f
+        }
+    }
+
+    private fun shouldUseInnerBackground(ringStats: ColorStats, innerStats: ColorStats): Boolean {
+        if (ringStats.count < MIN_BG_SAMPLES) {
+            return true
+        }
+        if (innerStats.count == 0) {
+            return false
+        }
+        val ringVariance = ringStats.lumaVariance()
+        val innerVariance = innerStats.lumaVariance()
+        if (ringVariance > innerVariance * RING_VARIANCE_MULTIPLIER) {
+            return true
+        }
+        val ringColor = ringStats.dominantColor()
+        val innerColor = innerStats.dominantColor()
+        return colorDistance(ringColor, innerColor) > BG_COLOR_DISTANCE_THRESHOLD
+    }
+
+    private fun colorDistance(a: Int, b: Int): Int {
+        return abs(Color.red(a) - Color.red(b)) +
+            abs(Color.green(a) - Color.green(b)) +
+            abs(Color.blue(a) - Color.blue(b))
+    }
+
     private fun clampRect(rect: Rect, width: Int, height: Int): Rect {
         return Rect(
             rect.left.coerceIn(0, width),
@@ -256,10 +272,11 @@ class OverlayStyleExtractor(
     }
 
     private fun defaultStyle(block: OverlayTextBlock, layoutType: LayoutType): OverlayStyle {
-        val targetFontPx = max(
+        val baseFontPx = max(
             1f,
             (block.boundingBox.height().toFloat() / max(1, block.lineCountHint)) / LINE_HEIGHT_MULTIPLIER,
         )
+        val targetFontPx = baseFontPx * resolveFontScale(layoutType)
         return OverlayStyle(
             bgColorArgb = Color.BLACK,
             fgColorArgb = Color.WHITE,
@@ -355,10 +372,10 @@ class OverlayStyleExtractor(
         const val LABEL_WIDTH_RATIO = 0.3f
         const val LABEL_HEIGHT_RATIO = 0.12f
         const val PARAGRAPH_HEIGHT_RATIO = 0.2f
-        const val MIN_CONTRAST_RATIO = 3.2f
-        const val SHADOW_ALPHA = 0.75f
-        const val SHADOW_RADIUS_DP = 2.5f
-        const val SHADOW_RADIUS_SUBTITLE_DP = 4f
+        const val MIN_CONTRAST_RATIO = 4.5f
+        const val COMPLEX_BG_ALPHA = 0.85f
+        const val RING_VARIANCE_MULTIPLIER = 1.6f
+        const val BG_COLOR_DISTANCE_THRESHOLD = 72
         const val LINE_HEIGHT_MULTIPLIER = 1.15f
         const val COLOR_BINS = 16 * 16 * 16
     }

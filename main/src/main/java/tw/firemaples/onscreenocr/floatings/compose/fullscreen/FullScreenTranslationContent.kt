@@ -137,11 +137,11 @@ private fun OverlayText(
     val style = block.overlayStyle
     val layoutType = style?.layoutType ?: LayoutType.Unknown
     val paddingScale = when (layoutType) {
-        LayoutType.Subtitle -> 1.15f
-        LayoutType.Bubble -> 1.1f
-        LayoutType.Label -> 0.9f
-        LayoutType.Paragraph -> 1.05f
-        LayoutType.Unknown -> 1f
+        LayoutType.Subtitle -> 0.9f
+        LayoutType.Bubble -> 1.0f
+        LayoutType.Label -> 0.8f
+        LayoutType.Paragraph -> 1.0f
+        LayoutType.Unknown -> 1.0f
     }
     val paddingHorizontalPx =
         min(rawPaddingHorizontalPx, boxWidthPx * PADDING_WIDTH_RATIO) * paddingScale
@@ -331,7 +331,7 @@ private fun measureText(
 }
 
 private const val MIN_FONT_SP = 6
-private const val MAX_FONT_SP = 24
+private const val MAX_FONT_SP = 48
 private const val MIN_FONT_RATIO = 0.3f
 private const val LINE_HEIGHT_MULTIPLIER = 1.15f
 private const val PADDING_WIDTH_RATIO = 0.12f
