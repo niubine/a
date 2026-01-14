@@ -110,8 +110,15 @@ private fun OverlayText(
     rootOffsetX: Int,
     rootOffsetY: Int,
 ) {
+    val density = LocalDensity.current
+    val padding = 2.dp
+    val paddingPx = with(density) { padding.toPx() }
+    val availableHeightPx = (block.boundingBox.height() - paddingPx * 2).coerceAtLeast(0f)
+    val calculatedFontSize = with(density) { (availableHeightPx * 0.85f).toSp() }
+    val fontSize = maxOf(10.sp, minOf(14.sp, calculatedFontSize))
     val textStyle = TextStyle(
-        fontSize = 14.sp,
+        fontSize = fontSize,
+        lineHeight = fontSize * 1.1f,
         color = MaterialTheme.colorScheme.onSurface,
     )
     val backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
@@ -128,7 +135,7 @@ private fun OverlayText(
                 height = block.boundingBox.height().pxToDp(),
             )
             .background(color = backgroundColor, shape = shape)
-            .padding(4.dp)
+            .padding(padding)
     ) {
         Text(
             text = block.text,
