@@ -732,8 +732,11 @@ class StateOperatorImpl @Inject constructor(
         var current = sorted.first()
 
         for (next in sorted.drop(1)) {
-            if (isSameLine(current.boundingBox, next.boundingBox) &&
-                gapBetween(current.boundingBox, next.boundingBox) <= maxGapPx
+            if (shouldMergeHorizontally(
+                    current = current,
+                    next = next,
+                    maxGapPx = maxGapPx,
+                )
             ) {
                 val mergedText = listOf(current.text, next.text)
                     .filter { it.isNotBlank() }
@@ -806,6 +809,11 @@ class StateOperatorImpl @Inject constructor(
         if (gap < 0 || gap > maxGapPx) {
             return false
         }
+        val minHeight = min(a.height(), b.height()).toFloat()
+        val dynamicGap = (minHeight * PARAGRAPH_GAP_HEIGHT_RATIO).roundToInt()
+        if (gap > min(maxGapPx, dynamicGap)) {
+            return false
+        }
 
         val overlapWidth = min(a.right, b.right) - max(a.left, b.left)
         val minWidth = min(a.width(), b.width()).toFloat().takeIf { it > 0 } ?: return false
@@ -833,6 +841,36 @@ class StateOperatorImpl @Inject constructor(
 
     private fun gapBetween(a: Rect, b: Rect): Int {
         return max(0, b.left - a.right)
+    }
+
+    private fun shouldMergeHorizontally(
+        current: OverlayTextBlock,
+        next: OverlayTextBlock,
+        maxGapPx: Int,
+    ): Boolean {
+        if (!isSameLine(current.boundingBox, next.boundingBox)) {
+            return false
+        }
+        val gap = gapBetween(current.boundingBox, next.boundingBox)
+        val minHeight = min(current.boundingBox.height(), next.boundingBox.height()).toFloat()
+        val dynamicGap = (minHeight * LINE_GAP_HEIGHT_RATIO).roundToInt()
+        if (gap > min(maxGapPx, dynamicGap)) {
+            return false
+        }
+
+        val fillRatio = calculateFillRatio(current.boundingBox, next.boundingBox)
+        return fillRatio >= LINE_FILL_RATIO_THRESHOLD
+    }
+
+    private fun calculateFillRatio(a: Rect, b: Rect): Float {
+        val union = Rect(a)
+        union.union(b)
+        val unionArea = union.width() * union.height()
+        if (unionArea <= 0) {
+            return 0f
+        }
+        val areaSum = (a.width() * a.height()) + (b.width() * b.height())
+        return areaSum.toFloat() / unionArea.toFloat()
     }
 
     private fun calculateIoU(a: Rect, b: Rect): Float {
@@ -1126,6 +1164,9 @@ class StateOperatorImpl @Inject constructor(
         const val IOU_THRESHOLD = 0.7f
         const val LINE_OVERLAP_THRESHOLD = 0.6f
         const val PARAGRAPH_OVERLAP_THRESHOLD = 0.6f
+        const val LINE_GAP_HEIGHT_RATIO = 0.45f
+        const val PARAGRAPH_GAP_HEIGHT_RATIO = 0.5f
+        const val LINE_FILL_RATIO_THRESHOLD = 0.78f
     }
 
     private fun startTranslation(
