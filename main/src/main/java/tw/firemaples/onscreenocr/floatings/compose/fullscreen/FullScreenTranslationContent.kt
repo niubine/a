@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,11 +47,7 @@ fun FullScreenTranslationContent(
         )
     }
 
-    val displayBlocks = if (state.showOriginal || state.translatedBlocks.isEmpty()) {
-        state.originalBlocks
-    } else {
-        state.translatedBlocks
-    }
+    val displayBlocks = if (state.showOriginal) emptyList() else state.translatedBlocks
 
     Box(
         modifier = Modifier
@@ -117,6 +114,8 @@ private fun OverlayText(
         fontSize = 14.sp,
         color = MaterialTheme.colorScheme.onSurface,
     )
+    val backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+    val shape = RoundedCornerShape(6.dp)
 
     Box(
         modifier = Modifier
@@ -128,10 +127,13 @@ private fun OverlayText(
                 width = block.boundingBox.width().pxToDp(),
                 height = block.boundingBox.height().pxToDp(),
             )
+            .background(color = backgroundColor, shape = shape)
+            .padding(4.dp)
     ) {
         Text(
             text = block.text,
             style = textStyle,
+            maxLines = 3,
         )
     }
 }
