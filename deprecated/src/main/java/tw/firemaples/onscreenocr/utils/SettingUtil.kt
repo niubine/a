@@ -7,12 +7,12 @@ import android.graphics.Rect
 import android.preference.PreferenceManager
 import tw.firemaples.onscreenocr.BuildConfig
 import tw.firemaples.onscreenocr.CoreApplication
-import tw.firemaples.onscreenocr.floatings.screencrop.HelpView
 import tw.firemaples.onscreenocr.floatings.screencrop.VersionHistoryView
 import tw.firemaples.onscreenocr.receivers.SamsungSpenInsertedReceiver
 import java.util.*
 
 object SettingUtil {
+    private const val README_VERSION = "2.2.0"
     private const val KEY_DEVICE_ID = "KEY_DEVICE_ID"
     private const val KEY_DEBUG_MODE = "KEY_DEBUG_MODE"
     private const val KEY_APP_SHOWING = "KEY_APP_SHOWING"
@@ -154,7 +154,7 @@ object SettingUtil {
 
     val isReadmeAlreadyShown: Boolean
         get() {
-            val currentVersion = HelpView.VERSION
+            val currentVersion = README_VERSION
 
             val result = sp.getString(KEY_HOW_TO_USE_SHOWN_VERSION, null) == currentVersion
             if (!result) {

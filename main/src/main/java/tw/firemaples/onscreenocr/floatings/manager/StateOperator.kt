@@ -249,6 +249,72 @@ class StateOperatorImpl @Inject constructor(
         }
     }
 
+    private fun startRecognition(
+        ocrLang: String,
+        ocrProvider: TextRecognitionProviderType,
+        croppedBitmap: Bitmap,
+        parentRect: Rect,
+        selectedRect: Rect,
+    ) = scope.launch {
+        stateNavigator.updateState(
+            NavState.TextRecognizing(
+                parentRect = parentRect,
+                selectedRect = selectedRect,
+                croppedBitmap = croppedBitmap,
+            )
+        )
+
+        try {
+            action.emit(StateOperatorAction.ShowResultView)
+
+            val recognizer = TextRecognizer.getRecognizer(ocrProvider)
+            val language = TextRecognizer.getLanguage(ocrLang, ocrProvider)!!
+
+            FirebaseEvent.logStartOCR(recognizer.name)
+            var result = withContext(Dispatchers.Default) {
+                recognizer.recognize(
+                    lang = language,
+                    bitmap = croppedBitmap,
+                )
+            }
+            logger.debug("On text recognized: $result")
+
+            if (SettingManager.removeSpacesInCJK) {
+                val cjkLang = arrayOf("zh", "ja", "ko")
+                if (cjkLang.contains(ocrLang.split("-").getOrNull(0))) {
+                    result = result.copy(
+                        result = result.result.replace(" ", "")
+                    )
+                }
+                logger.debug("Remove CJK spaces: $result")
+            }
+
+            FirebaseEvent.logOCRFinished(recognizer.name)
+
+            stateNavigator.navigate(
+                NavigationAction.NavigateToStartTranslation(
+                    croppedBitmap = croppedBitmap,
+                    parentRect = parentRect,
+                    selectedRect = selectedRect,
+                    recognitionResult = result,
+                )
+            )
+        } catch (e: Exception) {
+            val error =
+                if (e.message?.contains(Constants.errorInputImageIsTooSmall) == true) {
+                    context.getString(R.string.error_selected_area_too_small)
+                } else
+                    e.message
+                        ?: context.getString(R.string.error_an_unknown_error_found_while_recognition_text)
+
+            logger.warn(t = e)
+            showError(error)
+            FirebaseEvent.logOCRFailed(
+                TextRecognizer.getRecognizer(ocrProvider).name, e
+            )
+        }
+    }
+
     private fun startFullScreenCapturing(
         ocrLang: String,
         ocrProvider: TextRecognitionProviderType,
@@ -319,6 +385,82 @@ class StateOperatorImpl @Inject constructor(
                 t.message ?: context.getString(R.string.error_unknown_error_capturing_screen)
             showError(errorMsg)
             bitmap?.setReusable()
+        }
+    }
+
+    private fun startFullScreenRecognition(
+        ocrLang: String,
+        ocrProvider: TextRecognitionProviderType,
+        fullBitmap: Bitmap,
+        screenRect: Rect,
+    ) = scope.launch {
+        stateNavigator.updateState(
+            NavState.FullScreenTextRecognizing(
+                parentRect = screenRect,
+                selectedRect = screenRect,
+                croppedBitmap = fullBitmap,
+            )
+        )
+
+        try {
+            val recognizer = TextRecognizer.getRecognizer(ocrProvider)
+            val language = TextRecognizer.getLanguage(ocrLang, ocrProvider)!!
+            val accessibilityDeferred = async(Dispatchers.Default) {
+                TextAccessibilityService.snapshotTextBlocks(context.packageName)
+            }
+            val scaled = scaleBitmapForOcr(fullBitmap)
+
+            try {
+                FirebaseEvent.logStartOCR(recognizer.name)
+                var result = withContext(Dispatchers.Default) {
+                    recognizer.recognize(
+                        lang = language,
+                        bitmap = scaled.bitmap,
+                    )
+                }
+                if (scaled.isScaled) {
+                    result = scaleRecognitionResult(result, scaled.scaleX, scaled.scaleY)
+                }
+                logger.debug("On text recognized (full screen): $result")
+
+                if (SettingManager.removeSpacesInCJK) {
+                    val cjkLang = arrayOf("zh", "ja", "ko")
+                    if (cjkLang.contains(ocrLang.split("-").getOrNull(0))) {
+                        result = result.copy(
+                            result = result.result.replace(" ", "")
+                        )
+                    }
+                    logger.debug("Remove CJK spaces: $result")
+                }
+
+                FirebaseEvent.logOCRFinished(recognizer.name)
+
+                val accessibilityBlocks = accessibilityDeferred.await()
+
+                startFullScreenTranslation(
+                    screenRect = screenRect,
+                    fullBitmap = fullBitmap,
+                    recognitionResult = result,
+                    accessibilityBlocks = accessibilityBlocks,
+                )
+            } finally {
+                if (scaled.isScaled) {
+                    scaled.bitmap.setReusable()
+                }
+            }
+        } catch (e: Exception) {
+            val error =
+                if (e.message?.contains(Constants.errorInputImageIsTooSmall) == true) {
+                    context.getString(R.string.error_selected_area_too_small)
+                } else
+                    e.message
+                        ?: context.getString(R.string.error_an_unknown_error_found_while_recognition_text)
+
+            logger.warn(t = e)
+            showError(error)
+            FirebaseEvent.logOCRFailed(
+                TextRecognizer.getRecognizer(ocrProvider).name, e
+            )
         }
     }
 

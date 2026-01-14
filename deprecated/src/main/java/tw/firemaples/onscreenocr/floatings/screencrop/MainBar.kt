@@ -53,7 +53,6 @@ class MainBar(context: Context) : MovableFloatingView(context), RealButtonHandle
         val ids = listOf(R.string.menu_setting,
                 R.string.menu_privacy_policy,
                 R.string.menu_about,
-                R.string.menu_help,
                 R.string.menu_hide,
                 R.string.menu_exit)
         MenuView(context, ids.map { context.getString(it) }.toList(), ids, onMenuItemClickedListener)
@@ -79,11 +78,6 @@ class MainBar(context: Context) : MovableFloatingView(context), RealButtonHandle
     override fun attachToWindow() {
         super.attachToWindow()
         SettingUtil.isAppShowing = true
-
-        if (!SettingUtil.isReadmeAlreadyShown) {
-            HelpView(context).attachToWindow()
-            tempDisableAutoAreaSelecting.setValue(true)
-        }
 
         if (!SettingUtil.isVersionHistoryAlreadyShown) {
             VersionHistoryView(context).attachToWindow()
@@ -437,7 +431,6 @@ class MainBar(context: Context) : MovableFloatingView(context), RealButtonHandle
                     Utils.openBrowser(RemoteConfigUtil.privacyPolicyUrl)
                 }
                 R.string.menu_about -> AboutView(context).attachToWindow()
-                R.string.menu_help -> HelpView(context).attachToWindow()
                 R.string.menu_hide -> this@MainBar.detachFromWindow()
                 R.string.menu_exit -> ScreenTranslatorService.stop(true)
             }
