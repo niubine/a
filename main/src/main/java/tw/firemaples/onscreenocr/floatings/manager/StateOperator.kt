@@ -692,7 +692,11 @@ class StateOperatorImpl @Inject constructor(
             if (rect.width() < minSizePx || rect.height() < minSizePx) {
                 return@mapNotNull null
             }
-            OverlayTextBlock(text = text, boundingBox = rect)
+            OverlayTextBlock(
+                text = text,
+                boundingBox = rect,
+                lineCountHint = countLineBreaks(text),
+            )
         }
     }
 
@@ -721,7 +725,11 @@ class StateOperatorImpl @Inject constructor(
                     .joinToString(joiner)
                 val mergedRect = Rect(current.boundingBox)
                 mergedRect.union(next.boundingBox)
-                current = OverlayTextBlock(text = mergedText, boundingBox = mergedRect)
+                current = OverlayTextBlock(
+                    text = mergedText,
+                    boundingBox = mergedRect,
+                    lineCountHint = countLineBreaks(mergedText),
+                )
             } else {
                 result.add(current)
                 current = next
@@ -755,7 +763,11 @@ class StateOperatorImpl @Inject constructor(
                     .joinToString("\n")
                 val mergedRect = Rect(current.boundingBox)
                 mergedRect.union(next.boundingBox)
-                current = OverlayTextBlock(text = mergedText, boundingBox = mergedRect)
+                current = OverlayTextBlock(
+                    text = mergedText,
+                    boundingBox = mergedRect,
+                    lineCountHint = countLineBreaks(mergedText),
+                )
             } else {
                 result.add(current)
                 current = next
@@ -785,6 +797,14 @@ class StateOperatorImpl @Inject constructor(
         val overlapRatio = overlapWidth.toFloat() / minWidth
         val leftAligned = kotlin.math.abs(a.left - b.left) <= alignThresholdPx
         return overlapRatio >= PARAGRAPH_OVERLAP_THRESHOLD || leftAligned
+    }
+
+    private fun countLineBreaks(text: String): Int {
+        val trimmed = text.trim()
+        if (trimmed.isBlank()) {
+            return 1
+        }
+        return trimmed.count { it == '\n' } + 1
     }
 
     private fun isSameLine(a: Rect, b: Rect): Boolean {
@@ -905,7 +925,11 @@ class StateOperatorImpl @Inject constructor(
 
         if (sourceLangCode.firstPart().equals(targetLangCode.firstPart(), ignoreCase = true)) {
             val translatedBlocks = originalBlocks.map { block ->
-                OverlayTextBlock(text = block.text, boundingBox = block.boundingBox)
+                OverlayTextBlock(
+                    text = block.text,
+                    boundingBox = block.boundingBox,
+                    lineCountHint = block.lineCountHint,
+                )
             }
             return BlockTranslationResult.Success(translatedBlocks)
         }
@@ -971,7 +995,11 @@ class StateOperatorImpl @Inject constructor(
             text ?: originalTexts[index]
         }
         val translatedBlocks = originalBlocks.mapIndexed { index, block ->
-            OverlayTextBlock(text = finalTexts[index], boundingBox = block.boundingBox)
+            OverlayTextBlock(
+                text = finalTexts[index],
+                boundingBox = block.boundingBox,
+                lineCountHint = block.lineCountHint,
+            )
         }
         return BlockTranslationResult.Success(translatedBlocks)
     }
@@ -1050,6 +1078,7 @@ class StateOperatorImpl @Inject constructor(
                 OverlayTextBlock(
                     text = pieces[index],
                     boundingBox = block.boundingBox,
+                    lineCountHint = block.lineCountHint,
                 )
             }
         } else {
@@ -1057,6 +1086,7 @@ class StateOperatorImpl @Inject constructor(
                 OverlayTextBlock(
                     text = translatedText.trim(),
                     boundingBox = fallbackRect,
+                    lineCountHint = countLineBreaks(translatedText),
                 )
             )
         }

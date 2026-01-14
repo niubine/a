@@ -6,6 +6,7 @@ import tw.firemaples.onscreenocr.translator.TranslationProviderType
 data class OverlayTextBlock(
     val text: String,
     val boundingBox: Rect,
+    val lineCountHint: Int = 1,
 )
 
 data class FullScreenTranslationResult(

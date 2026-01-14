@@ -7,10 +7,9 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -132,19 +131,24 @@ private fun OverlayText(
     val rawPaddingVerticalPx = with(density) { 2.dp.toPx() }
     val boxWidthPx = block.boundingBox.width().toFloat()
     val boxHeightPx = block.boundingBox.height().toFloat()
-    val paddingHorizontalPx = min(rawPaddingHorizontalPx, boxWidthPx * 0.15f)
-    val paddingVerticalPx = min(rawPaddingVerticalPx, boxHeightPx * 0.2f)
-    val maxHeightCapPx = with(density) { MAX_HEIGHT_DP.dp.toPx() }
-    val maxHeightPx = max(
-        boxHeightPx,
-        min(boxHeightPx * MAX_HEIGHT_MULTIPLIER, maxHeightCapPx),
-    )
+    val paddingHorizontalPx = min(rawPaddingHorizontalPx, boxWidthPx * PADDING_WIDTH_RATIO)
+    val paddingVerticalPx = min(rawPaddingVerticalPx, boxHeightPx * PADDING_HEIGHT_RATIO)
     val availableWidthPx = max(1f, boxWidthPx - paddingHorizontalPx * 2f)
-    val availableHeightPx = max(1f, maxHeightPx - paddingVerticalPx * 2f)
-    val minFontSizePx = with(density) { MIN_FONT_SP.sp.toPx() }
-    val maxFontSizePx = min(
-        with(density) { MAX_FONT_SP.sp.toPx() },
-        availableHeightPx,
+    val availableHeightPx = max(1f, boxHeightPx - paddingVerticalPx * 2f)
+    val lineCountHint = max(1, block.lineCountHint)
+    val maxFontSizePx = max(
+        1f,
+        min(
+            with(density) { MAX_FONT_SP.sp.toPx() },
+            (availableHeightPx / lineCountHint) / LINE_HEIGHT_MULTIPLIER,
+        ),
+    )
+    val minFontSizePx = max(
+        1f,
+        min(
+            with(density) { MIN_FONT_SP.sp.toPx() },
+            maxFontSizePx * MIN_FONT_RATIO,
+        ),
     )
     val densityValue = density.density
     val fontScale = density.fontScale
@@ -152,6 +156,7 @@ private fun OverlayText(
         block.text,
         availableWidthPx,
         availableHeightPx,
+        lineCountHint,
         densityValue,
         fontScale,
     ) {
@@ -162,21 +167,22 @@ private fun OverlayText(
             maxHeightPx = availableHeightPx,
             minFontPx = minFontSizePx,
             maxFontPx = maxFontSizePx,
+            lineHeightMultiplier = LINE_HEIGHT_MULTIPLIER,
             density = density,
         )
     }
     val fontSizeSp = with(density) { fittedText.fontSizePx.toSp() }
+    val lineHeightSp = fontSizeSp * LINE_HEIGHT_MULTIPLIER
     val maxLines = max(1, fittedText.layoutResult.lineCount)
     val textStyle = TextStyle(
         fontSize = fontSizeSp,
+        lineHeight = lineHeightSp,
         color = Color.White,
     )
     val shape = RoundedCornerShape(4.dp)
     val backgroundColor = Color(0xCC000000)
     val paddingHorizontalDp = with(density) { paddingHorizontalPx.toDp() }
     val paddingVerticalDp = with(density) { paddingVerticalPx.toDp() }
-    val minHeightDp = with(density) { boxHeightPx.toDp() }
-    val maxHeightDp = with(density) { maxHeightPx.toDp() }
 
     Box(
         modifier = Modifier
@@ -185,8 +191,7 @@ private fun OverlayText(
                 y = (block.boundingBox.top - rootOffsetY).pxToDp(),
             )
             .width(block.boundingBox.width().pxToDp())
-            .heightIn(min = minHeightDp, max = maxHeightDp)
-            .wrapContentHeight()
+            .height(block.boundingBox.height().pxToDp())
             .background(backgroundColor, shape)
             .padding(horizontal = paddingHorizontalDp, vertical = paddingVerticalDp)
     ) {
@@ -212,6 +217,7 @@ private fun fitTextSize(
     maxHeightPx: Float,
     minFontPx: Float,
     maxFontPx: Float,
+    lineHeightMultiplier: Float,
     density: androidx.compose.ui.unit.Density,
 ): FittedText {
     if (text.isBlank() || maxWidthPx <= 0f || maxHeightPx <= 0f) {
@@ -221,6 +227,7 @@ private fun fitTextSize(
             fontSizePx = minFontPx,
             maxWidthPx = maxWidthPx,
             maxHeightPx = maxHeightPx,
+            lineHeightMultiplier = lineHeightMultiplier,
             density = density,
         )
         return FittedText(minFontPx, layoutResult)
@@ -239,6 +246,7 @@ private fun fitTextSize(
             fontSizePx = mid,
             maxWidthPx = maxWidthPx,
             maxHeightPx = maxHeightPx,
+            lineHeightMultiplier = lineHeightMultiplier,
             density = density,
         )
         val fits = !layoutResult.didOverflowWidth && !layoutResult.didOverflowHeight
@@ -256,6 +264,7 @@ private fun fitTextSize(
         fontSizePx = best,
         maxWidthPx = maxWidthPx,
         maxHeightPx = maxHeightPx,
+        lineHeightMultiplier = lineHeightMultiplier,
         density = density,
     )
     return FittedText(best, finalLayout)
@@ -267,12 +276,17 @@ private fun measureText(
     fontSizePx: Float,
     maxWidthPx: Float,
     maxHeightPx: Float,
+    lineHeightMultiplier: Float,
     density: androidx.compose.ui.unit.Density,
 ): androidx.compose.ui.text.TextLayoutResult {
     val fontSizeSp = with(density) { fontSizePx.toSp() }
+    val lineHeightSp = fontSizeSp * lineHeightMultiplier
     return textMeasurer.measure(
         text = AnnotatedString(text),
-        style = TextStyle(fontSize = fontSizeSp),
+        style = TextStyle(
+            fontSize = fontSizeSp,
+            lineHeight = lineHeightSp,
+        ),
         constraints = Constraints(
             maxWidth = maxWidthPx.roundToInt(),
             maxHeight = maxHeightPx.roundToInt(),
@@ -283,9 +297,11 @@ private fun measureText(
     )
 }
 
-private const val MIN_FONT_SP = 10
-private const val MAX_FONT_SP = 28
-private const val MAX_HEIGHT_MULTIPLIER = 6f
-private const val MAX_HEIGHT_DP = 240
-private const val MAX_LINES_CAP = 8
+private const val MIN_FONT_SP = 6
+private const val MAX_FONT_SP = 24
+private const val MIN_FONT_RATIO = 0.3f
+private const val LINE_HEIGHT_MULTIPLIER = 1.15f
+private const val PADDING_WIDTH_RATIO = 0.12f
+private const val PADDING_HEIGHT_RATIO = 0.18f
+private const val MAX_LINES_CAP = 12
 private const val FIT_ITERATIONS = 7
