@@ -5,7 +5,6 @@ import dagger.hilt.android.HiltAndroidApp
 import tw.firemaples.onscreenocr.log.FirebaseEvent
 import tw.firemaples.onscreenocr.log.UserInfoUtils
 import tw.firemaples.onscreenocr.remoteconfig.RemoteConfigManager
-// import tw.firemaples.onscreenocr.utils.AdManager
 
 @HiltAndroidApp
 class CoreApplication : Application() {
@@ -20,6 +19,5 @@ class CoreApplication : Application() {
         FirebaseEvent.validateSignature()
         UserInfoUtils.setClientInfo()
         RemoteConfigManager.tryFetchNew()
-        // AdManager.init()
     }
 }

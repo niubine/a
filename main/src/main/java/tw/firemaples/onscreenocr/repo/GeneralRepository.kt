@@ -11,8 +11,6 @@ import tw.firemaples.onscreenocr.pages.setting.SettingManager
 import tw.firemaples.onscreenocr.pref.AppPref
 
 class GeneralRepository {
-    private val readmeVersion = "2.2.0"
-
     fun isRememberLastSelection(): Flow<Boolean> = flow {
         emit(SettingManager.saveLastSelectionArea)
     }.flowOn(Dispatchers.Default)
@@ -24,18 +22,6 @@ class GeneralRepository {
     suspend fun setLastRememberedSelectionArea(rect: Rect) {
         withContext(Dispatchers.Default) {
             AppPref.lastSelectionArea = rect
-        }
-    }
-
-    fun isReadmeAlreadyShown(): Flow<Boolean> = flow {
-        val lastVersionName = readmeVersion
-        val lastShownName = AppPref.lastReadmeShownVersion
-
-        if (lastVersionName != lastShownName) {
-            AppPref.lastReadmeShownVersion = lastVersionName
-            emit(false)
-        } else {
-            emit(true)
         }
     }
 

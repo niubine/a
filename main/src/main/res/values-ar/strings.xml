@@ -48,7 +48,6 @@
     <string name="pref_summary_on_keep_media_projection_resources">الحفاظ على الموارد حتى إعادة التشغيل</string>
     <string name="pref_summary_off_keep_media_projection_resources">الافراج عن الموارد بعد استخدامها</string>
     <string name="menu_setting">إعدادات</string>
-    <string name="menu_readme">كيفية الاستخدام</string>
     <string name="menu_hide">إخفاء</string>
     <string name="menu_exit">خروج</string>
     <string name="text_ocr_language">" اللغات المدعومة لاستخراج النصوص"</string>
@@ -82,7 +81,6 @@
     <string name="msg_translator_provider_does_not_support_the_ocr_lang">مزود الترجمة هذا لا يدعم لغة التعرف المختارة.</string>
     <string name="msg_please_restart_the_app_to_take_effect">يرجى إعادة تشغيل التطبيق ليصبح ساري المفعول</string>
     <string name="title_error">خطأ</string>
-    <string name="title_guide">طريقة الأستخدام</string>
     <string name="title_failed_to_check_resources">فشل التحقق من الموارد</string>
     <string name="title_download">تنزيل</string>
     <string name="title_resources_downloading">تنزيل الموارد</string>

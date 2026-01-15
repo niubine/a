@@ -40,7 +40,6 @@
         app:layout_constraintBottom_toTopOf="@id/editor"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        tools:src="@drawable/guide_6_result_window"
         tools:targetApi="m" />
 
     <EditText
