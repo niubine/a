@@ -34,6 +34,11 @@ object FullScreenBitmapCleaner {
             return null
         }
 
+        val filteredBlocks = filterOverlayBlocks(blocks, bitmap.width, bitmap.height)
+        if (filteredBlocks.isEmpty()) {
+            return null
+        }
+
         val source = Mat()
         val output = Mat()
         val mask = Mat.zeros(bitmap.height, bitmap.width, CvType.CV_8UC1)
@@ -43,7 +48,7 @@ object FullScreenBitmapCleaner {
             Utils.bitmapToMat(bitmap, source)
             source.copyTo(output)
 
-            blocks.forEach { block ->
+            filteredBlocks.forEach { block ->
                 val rect = clampRect(block.boundingBox, bitmap.width, bitmap.height)
                 if (rect.width() <= 0 || rect.height() <= 0) {
                     return@forEach
@@ -93,6 +98,10 @@ object FullScreenBitmapCleaner {
         if (blocks.isEmpty() || cleanedBitmap.width <= 0 || cleanedBitmap.height <= 0) {
             return null
         }
+        val filteredBlocks = filterOverlayBlocks(blocks, cleanedBitmap.width, cleanedBitmap.height)
+        if (filteredBlocks.isEmpty()) {
+            return null
+        }
         val overlay = Bitmap.createBitmap(
             cleanedBitmap.width,
             cleanedBitmap.height,
@@ -102,7 +111,7 @@ object FullScreenBitmapCleaner {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             isFilterBitmap = true
         }
-        blocks.forEach { block ->
+        filteredBlocks.forEach { block ->
             val rect = clampRect(block.boundingBox, cleanedBitmap.width, cleanedBitmap.height)
             if (rect.width() <= 0 || rect.height() <= 0) {
                 return@forEach
@@ -112,6 +121,41 @@ object FullScreenBitmapCleaner {
             canvas.drawBitmap(cleanedBitmap, src, padded, paint)
         }
         return overlay
+    }
+
+    private fun filterOverlayBlocks(
+        blocks: List<OverlayTextBlock>,
+        width: Int,
+        height: Int,
+    ): List<OverlayTextBlock> {
+        val screenArea = width.toLong() * height.toLong()
+        if (screenArea <= 0L || blocks.isEmpty()) {
+            return emptyList()
+        }
+        val maxBlockArea = (screenArea * MAX_OVERLAY_BLOCK_AREA_RATIO).toLong()
+        var coveredArea = 0L
+        val filtered = mutableListOf<OverlayTextBlock>()
+        for (block in blocks) {
+            if (block.source == OverlayTextSource.Fallback) {
+                continue
+            }
+            val rect = clampRect(block.boundingBox, width, height)
+            val area = rect.width().toLong() * rect.height().toLong()
+            if (area <= 0L || area >= maxBlockArea) {
+                continue
+            }
+            filtered.add(block)
+            coveredArea += area
+        }
+        if (filtered.isEmpty()) {
+            return emptyList()
+        }
+        val coverageRatio = coveredArea.toDouble() / screenArea.toDouble()
+        return if (coverageRatio >= MAX_OVERLAY_COVERAGE_RATIO) {
+            emptyList()
+        } else {
+            filtered
+        }
     }
 
     private fun ensureOpenCv(): Boolean {
@@ -171,4 +215,6 @@ object FullScreenBitmapCleaner {
     private const val MIN_MASK_PAD_PX = 2
     private const val MASK_DILATE_SIZE = 3
     private const val INPAINT_RADIUS = 3.5
+    private const val MAX_OVERLAY_BLOCK_AREA_RATIO = 0.85f
+    private const val MAX_OVERLAY_COVERAGE_RATIO = 0.9f
 }

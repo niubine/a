@@ -60,11 +60,11 @@ fun FullScreenTranslationContent(
         label = "translationAlpha",
     )
     val backgroundBitmap = if (state.showOriginal) {
-        state.originalBitmap
+        null
     } else {
         state.cleanedBitmap
     }
-    val transformBitmap = state.originalBitmap ?: backgroundBitmap
+    val transformBitmap = state.originalBitmap ?: state.cleanedBitmap
 
     LaunchedEffect(Unit) {
         val rootLocation = requestRootLocationOnScreen.invoke()
@@ -104,45 +104,38 @@ fun FullScreenTranslationContent(
         val viewHeightPx = constraints.maxHeight
         val transform = remember(
             transformBitmap,
+            state.rootOffset,
             viewWidthPx,
             viewHeightPx,
         ) {
-            resolveDisplayTransform(
-                bitmap = transformBitmap,
-                viewWidthPx = viewWidthPx,
-                viewHeightPx = viewHeightPx,
-            )
+            resolveDisplayTransform(rootOffset = state.rootOffset)
         }
         val layoutBounds = remember(viewWidthPx, viewHeightPx) {
             Rect(0, 0, viewWidthPx, viewHeightPx)
         }
         val scaledTranslatedBlocks = remember(
             state.translatedBlocks,
-            state.rootOffset,
             transform,
         ) {
             scaleBlocksForDisplay(
                 blocks = state.translatedBlocks,
-                rootOffset = state.rootOffset,
                 transform = transform,
             )
         }
         val scaledOriginalBlocks = remember(
             state.originalBlocks,
-            state.rootOffset,
             transform,
         ) {
             scaleBlocksForDisplay(
                 blocks = state.originalBlocks,
-                rootOffset = state.rootOffset,
                 transform = transform,
             )
         }
 
         backgroundBitmap?.let { bitmap ->
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val scaledWidth = (bitmap.width * transform.scale).roundToInt()
-                val scaledHeight = (bitmap.height * transform.scale).roundToInt()
+                val scaledWidth = (bitmap.width * transform.scaleX).roundToInt()
+                val scaledHeight = (bitmap.height * transform.scaleY).roundToInt()
                 drawImage(
                     image = bitmap.asImageBitmap(),
                     dstOffset = IntOffset(
@@ -487,29 +480,27 @@ private fun clampRectToBounds(rect: Rect, bounds: Rect): Rect {
 }
 
 private data class DisplayTransform(
-    val scale: Float,
+    val scaleX: Float,
+    val scaleY: Float,
     val offsetX: Float,
     val offsetY: Float,
 )
 
-private fun resolveDisplayTransform(
-    bitmap: android.graphics.Bitmap?,
-    viewWidthPx: Int,
-    viewHeightPx: Int,
-): DisplayTransform {
-    if (bitmap == null || bitmap.width <= 0 || bitmap.height <= 0) {
-        return DisplayTransform(1f, 0f, 0f)
-    }
-    if (viewWidthPx <= 0 || viewHeightPx <= 0) {
-        return DisplayTransform(1f, 0f, 0f)
-    }
-    val scale = viewWidthPx.toFloat() / bitmap.width.toFloat()
-    return DisplayTransform(scale = scale, offsetX = 0f, offsetY = 0f)
+private fun resolveDisplayTransform(rootOffset: IntOffset): DisplayTransform {
+    val scaleX = 1f
+    val scaleY = 1f
+    val offsetX = -rootOffset.x.toFloat()
+    val offsetY = -rootOffset.y.toFloat()
+    return DisplayTransform(
+        scaleX = scaleX,
+        scaleY = scaleY,
+        offsetX = offsetX,
+        offsetY = offsetY,
+    )
 }
 
 private fun scaleBlocksForDisplay(
     blocks: List<OverlayTextBlock>,
-    rootOffset: IntOffset,
     transform: DisplayTransform,
 ): List<OverlayTextBlock> {
     if (blocks.isEmpty()) {
@@ -518,29 +509,27 @@ private fun scaleBlocksForDisplay(
     return blocks.map { block ->
         val scaledRect = transformRect(
             rect = block.boundingBox,
-            rootOffset = rootOffset,
             transform = transform,
         )
         val scaledStyle = block.overlayStyle?.let { style ->
-            style.copy(targetFontPx = style.targetFontPx * transform.scale)
+            style.copy(targetFontPx = style.targetFontPx * transform.scaleY)
         }
         block.copy(
             boundingBox = scaledRect,
             overlayStyle = scaledStyle,
-            fontSizeHintPx = block.fontSizeHintPx?.let { it * transform.scale },
+            fontSizeHintPx = block.fontSizeHintPx?.let { it * transform.scaleY },
         )
     }
 }
 
 private fun transformRect(
     rect: Rect,
-    rootOffset: IntOffset,
     transform: DisplayTransform,
 ): Rect {
-    val left = ((rect.left - rootOffset.x) * transform.scale + transform.offsetX).roundToInt()
-    val top = ((rect.top - rootOffset.y) * transform.scale + transform.offsetY).roundToInt()
-    val right = ((rect.right - rootOffset.x) * transform.scale + transform.offsetX).roundToInt()
-    val bottom = ((rect.bottom - rootOffset.y) * transform.scale + transform.offsetY).roundToInt()
+    val left = (rect.left * transform.scaleX + transform.offsetX).roundToInt()
+    val top = (rect.top * transform.scaleY + transform.offsetY).roundToInt()
+    val right = (rect.right * transform.scaleX + transform.offsetX).roundToInt()
+    val bottom = (rect.bottom * transform.scaleY + transform.offsetY).roundToInt()
     return Rect(left, top, right, bottom)
 }
 
