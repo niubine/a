@@ -1,12 +1,13 @@
 package tw.firemaples.onscreenocr.floatings.compose.fullscreen
 
 import android.graphics.Rect
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -28,14 +29,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tw.firemaples.onscreenocr.floatings.compose.base.pxToDp
@@ -61,8 +62,9 @@ fun FullScreenTranslationContent(
     val backgroundBitmap = if (state.showOriginal) {
         state.originalBitmap
     } else {
-        state.cleanedBitmap ?: state.originalBitmap
+        state.cleanedBitmap
     }
+    val transformBitmap = state.originalBitmap ?: backgroundBitmap
 
     LaunchedEffect(Unit) {
         val rootLocation = requestRootLocationOnScreen.invoke()
@@ -72,7 +74,7 @@ fun FullScreenTranslationContent(
         )
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent)
@@ -98,46 +100,83 @@ fun FullScreenTranslationContent(
                 }
             }
     ) {
-        backgroundBitmap?.let { bitmap ->
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.FillBounds,
+        val viewWidthPx = constraints.maxWidth
+        val viewHeightPx = constraints.maxHeight
+        val transform = remember(
+            transformBitmap,
+            viewWidthPx,
+            viewHeightPx,
+        ) {
+            resolveDisplayTransform(
+                bitmap = transformBitmap,
+                viewWidthPx = viewWidthPx,
+                viewHeightPx = viewHeightPx,
+            )
+        }
+        val layoutBounds = remember(viewWidthPx, viewHeightPx) {
+            Rect(0, 0, viewWidthPx, viewHeightPx)
+        }
+        val scaledTranslatedBlocks = remember(
+            state.translatedBlocks,
+            state.rootOffset,
+            transform,
+        ) {
+            scaleBlocksForDisplay(
+                blocks = state.translatedBlocks,
+                rootOffset = state.rootOffset,
+                transform = transform,
+            )
+        }
+        val scaledOriginalBlocks = remember(
+            state.originalBlocks,
+            state.rootOffset,
+            transform,
+        ) {
+            scaleBlocksForDisplay(
+                blocks = state.originalBlocks,
+                rootOffset = state.rootOffset,
+                transform = transform,
             )
         }
 
-        state.translatedBlocks.filter { it.text.isNotBlank() }.forEach { block ->
+        backgroundBitmap?.let { bitmap ->
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val scaledWidth = (bitmap.width * transform.scale).roundToInt()
+                val scaledHeight = (bitmap.height * transform.scale).roundToInt()
+                drawImage(
+                    image = bitmap.asImageBitmap(),
+                    dstOffset = IntOffset(
+                        transform.offsetX.roundToInt(),
+                        transform.offsetY.roundToInt(),
+                    ),
+                    dstSize = IntSize(scaledWidth, scaledHeight),
+                )
+            }
+        }
+
+        scaledTranslatedBlocks.filter { it.text.isNotBlank() }.forEach { block ->
             OverlayText(
                 block = block,
-                rootOffsetX = state.rootOffset.x,
-                rootOffsetY = state.rootOffset.y,
+                layoutBounds = layoutBounds,
                 alpha = translationAlpha,
             )
         }
 
         if (state.isProcessing && !state.showOriginal) {
-            state.originalBlocks.filter { it.text.isNotBlank() }.forEach { block ->
-                DebugOverlayRect(
-                    block = block,
-                    rootOffsetX = state.rootOffset.x,
-                    rootOffsetY = state.rootOffset.y,
-                )
+            scaledOriginalBlocks.filter { it.text.isNotBlank() }.forEach { block ->
+                DebugOverlayRect(block = block)
             }
         }
-
     }
 }
 
 @Composable
 private fun OverlayText(
     block: OverlayTextBlock,
-    rootOffsetX: Int,
-    rootOffsetY: Int,
+    layoutBounds: Rect,
     alpha: Float,
 ) {
     val density = LocalDensity.current
-    val configuration = LocalConfiguration.current
     val textMeasurer = rememberTextMeasurer()
     val rawPaddingHorizontalPx = with(density) { 4.dp.toPx() }
     val rawPaddingVerticalPx = with(density) { 2.dp.toPx() }
@@ -154,17 +193,12 @@ private fun OverlayText(
         with(density) { MASK_EXTRA_DP.dp.toPx() },
         desiredFontPx * MASK_EXTRA_FONT_RATIO,
     )
-    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
-    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+    val screenWidthPx = layoutBounds.width().toFloat()
+    val screenHeightPx = layoutBounds.height().toFloat()
     val screenMarginPx = with(density) { SCREEN_MARGIN_DP.dp.toPx() }
     val usableScreenWidthPx = max(1f, screenWidthPx - screenMarginPx * 2f)
     val usableScreenHeightPx = max(1f, screenHeightPx - screenMarginPx * 2f)
-    val screenRect = Rect(
-        rootOffsetX,
-        rootOffsetY,
-        (rootOffsetX + screenWidthPx).roundToInt(),
-        (rootOffsetY + screenHeightPx).roundToInt(),
-    )
+    val screenRect = layoutBounds
     val maxExpandWidthPx = min(
         usableScreenWidthPx,
         block.boundingBox.width().toFloat() * MAX_EXPAND_RATIO + maskExtraPx * 2f,
@@ -298,8 +332,8 @@ private fun OverlayText(
     Box(
         modifier = Modifier
             .absoluteOffset(
-                x = (expandedRect.left - rootOffsetX).pxToDp(),
-                y = (expandedRect.top - rootOffsetY).pxToDp(),
+                x = expandedRect.left.pxToDp(),
+                y = expandedRect.top.pxToDp(),
             )
             .width(expandedRect.width().pxToDp())
             .height(expandedRect.height().pxToDp())
@@ -320,15 +354,13 @@ private fun OverlayText(
 @Composable
 private fun DebugOverlayRect(
     block: OverlayTextBlock,
-    rootOffsetX: Int,
-    rootOffsetY: Int,
 ) {
     val shape = RoundedCornerShape(2.dp)
     Box(
         modifier = Modifier
             .absoluteOffset(
-                x = (block.boundingBox.left - rootOffsetX).pxToDp(),
-                y = (block.boundingBox.top - rootOffsetY).pxToDp(),
+                x = block.boundingBox.left.pxToDp(),
+                y = block.boundingBox.top.pxToDp(),
             )
             .width(block.boundingBox.width().pxToDp())
             .height(block.boundingBox.height().pxToDp())
@@ -452,6 +484,64 @@ private fun clampRectToBounds(rect: Rect, bounds: Rect): Rect {
         top = bounds.bottom - height
     }
     return Rect(left, top, left + width, top + height)
+}
+
+private data class DisplayTransform(
+    val scale: Float,
+    val offsetX: Float,
+    val offsetY: Float,
+)
+
+private fun resolveDisplayTransform(
+    bitmap: android.graphics.Bitmap?,
+    viewWidthPx: Int,
+    viewHeightPx: Int,
+): DisplayTransform {
+    if (bitmap == null || bitmap.width <= 0 || bitmap.height <= 0) {
+        return DisplayTransform(1f, 0f, 0f)
+    }
+    if (viewWidthPx <= 0 || viewHeightPx <= 0) {
+        return DisplayTransform(1f, 0f, 0f)
+    }
+    val scale = viewWidthPx.toFloat() / bitmap.width.toFloat()
+    return DisplayTransform(scale = scale, offsetX = 0f, offsetY = 0f)
+}
+
+private fun scaleBlocksForDisplay(
+    blocks: List<OverlayTextBlock>,
+    rootOffset: IntOffset,
+    transform: DisplayTransform,
+): List<OverlayTextBlock> {
+    if (blocks.isEmpty()) {
+        return emptyList()
+    }
+    return blocks.map { block ->
+        val scaledRect = transformRect(
+            rect = block.boundingBox,
+            rootOffset = rootOffset,
+            transform = transform,
+        )
+        val scaledStyle = block.overlayStyle?.let { style ->
+            style.copy(targetFontPx = style.targetFontPx * transform.scale)
+        }
+        block.copy(
+            boundingBox = scaledRect,
+            overlayStyle = scaledStyle,
+            fontSizeHintPx = block.fontSizeHintPx?.let { it * transform.scale },
+        )
+    }
+}
+
+private fun transformRect(
+    rect: Rect,
+    rootOffset: IntOffset,
+    transform: DisplayTransform,
+): Rect {
+    val left = ((rect.left - rootOffset.x) * transform.scale + transform.offsetX).roundToInt()
+    val top = ((rect.top - rootOffset.y) * transform.scale + transform.offsetY).roundToInt()
+    val right = ((rect.right - rootOffset.x) * transform.scale + transform.offsetX).roundToInt()
+    val bottom = ((rect.bottom - rootOffset.y) * transform.scale + transform.offsetY).roundToInt()
+    return Rect(left, top, right, bottom)
 }
 
 private const val MIN_FONT_SP = 6

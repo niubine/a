@@ -1,7 +1,9 @@
 package tw.firemaples.onscreenocr.floatings.manager
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.Rect
 import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
@@ -82,6 +84,34 @@ object FullScreenBitmapCleaner {
             output.release()
             mask.release()
         }
+    }
+
+    fun buildOverlayBitmap(
+        cleanedBitmap: Bitmap,
+        blocks: List<OverlayTextBlock>,
+    ): Bitmap? {
+        if (blocks.isEmpty() || cleanedBitmap.width <= 0 || cleanedBitmap.height <= 0) {
+            return null
+        }
+        val overlay = Bitmap.createBitmap(
+            cleanedBitmap.width,
+            cleanedBitmap.height,
+            Bitmap.Config.ARGB_8888,
+        )
+        val canvas = Canvas(overlay)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            isFilterBitmap = true
+        }
+        blocks.forEach { block ->
+            val rect = clampRect(block.boundingBox, cleanedBitmap.width, cleanedBitmap.height)
+            if (rect.width() <= 0 || rect.height() <= 0) {
+                return@forEach
+            }
+            val padded = padRect(rect, cleanedBitmap.width, cleanedBitmap.height)
+            val src = Rect(padded)
+            canvas.drawBitmap(cleanedBitmap, src, padded, paint)
+        }
+        return overlay
     }
 
     private fun ensureOpenCv(): Boolean {

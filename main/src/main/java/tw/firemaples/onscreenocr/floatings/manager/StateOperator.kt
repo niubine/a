@@ -558,16 +558,20 @@ class StateOperatorImpl @Inject constructor(
                 }
             }
 
-            val cleanedBitmap = runCatching { cleanBitmapDeferred.await() }
+            val cleanedFullBitmap = runCatching { cleanBitmapDeferred.await() }
                 .onFailure { logger.warn(t = it) }
                 .getOrNull()
             val styledTranslatedBlocks = withContext(Dispatchers.Default) {
                 overlayStyleExtractor.applyStyles(
-                    bitmap = cleanedBitmap ?: fullBitmap,
+                    bitmap = cleanedFullBitmap ?: fullBitmap,
                     blocks = translatedBlocks,
                     screenRect = screenRect,
                 )
             }
+            val cleanedOverlayBitmap = cleanedFullBitmap?.let {
+                FullScreenBitmapCleaner.buildOverlayBitmap(it, styledOriginalBlocks)
+            }
+            cleanedFullBitmap?.setReusable()
 
             FirebaseEvent.logTranslationTextFinished(translator)
 
@@ -581,7 +585,7 @@ class StateOperatorImpl @Inject constructor(
                         originalBlocks = styledOriginalBlocks,
                         translatedBlocks = styledTranslatedBlocks,
                         providerType = translator.type,
-                        cleanedBitmap = cleanedBitmap,
+                        cleanedBitmap = cleanedOverlayBitmap,
                     ),
                 )
             )
