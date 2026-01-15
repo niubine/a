@@ -9,6 +9,7 @@ data class OverlayTextBlock(
     val lineCountHint: Int = 1,
     val source: OverlayTextSource = OverlayTextSource.Unknown,
     val overlayStyle: OverlayStyle? = null,
+    val fontSizeHintPx: Float? = null,
 )
 
 data class OverlayStyle(

@@ -157,6 +157,7 @@ class FullScreenTranslationViewModelImpl @Inject constructor(
                 boundingBox = block.boundingBox,
                 lineCountHint = block.lineCount.coerceAtLeast(1),
                 source = OverlayTextSource.Ocr,
+                fontSizeHintPx = block.fontSizeHintPx,
             )
         }
     }
