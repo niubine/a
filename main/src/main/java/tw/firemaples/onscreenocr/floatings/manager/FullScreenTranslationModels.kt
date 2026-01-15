@@ -1,5 +1,6 @@
 package tw.firemaples.onscreenocr.floatings.manager
 
+import android.graphics.Bitmap
 import android.graphics.Rect
 import tw.firemaples.onscreenocr.translator.TranslationProviderType
 
@@ -9,6 +10,7 @@ data class OverlayTextBlock(
     val lineCountHint: Int = 1,
     val source: OverlayTextSource = OverlayTextSource.Unknown,
     val overlayStyle: OverlayStyle? = null,
+    val fontSizeHintPx: Float? = null,
 )
 
 data class OverlayStyle(
@@ -42,4 +44,5 @@ data class FullScreenTranslationResult(
     val originalBlocks: List<OverlayTextBlock>,
     val translatedBlocks: List<OverlayTextBlock>,
     val providerType: TranslationProviderType,
+    val cleanedBitmap: Bitmap? = null,
 )

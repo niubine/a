@@ -104,10 +104,9 @@ class OverlayStyleExtractor(
         }
         val useBlurBg = false
 
-        val baseFontPx = max(
-            1f,
-            (rect.height().toFloat() / max(1, block.lineCountHint)) / LINE_HEIGHT_MULTIPLIER,
-        )
+        val rawBaseFontPx = block.fontSizeHintPx
+            ?: (rect.height().toFloat() / max(1, block.lineCountHint)) / LINE_HEIGHT_MULTIPLIER
+        val baseFontPx = max(1f, rawBaseFontPx)
         val targetFontPx = baseFontPx * resolveFontScale(layoutType)
 
         return OverlayStyle(
@@ -276,10 +275,9 @@ class OverlayStyleExtractor(
     }
 
     private fun defaultStyle(block: OverlayTextBlock, layoutType: LayoutType): OverlayStyle {
-        val baseFontPx = max(
-            1f,
-            (block.boundingBox.height().toFloat() / max(1, block.lineCountHint)) / LINE_HEIGHT_MULTIPLIER,
-        )
+        val rawBaseFontPx = block.fontSizeHintPx
+            ?: (block.boundingBox.height().toFloat() / max(1, block.lineCountHint)) / LINE_HEIGHT_MULTIPLIER
+        val baseFontPx = max(1f, rawBaseFontPx)
         val targetFontPx = baseFontPx * resolveFontScale(layoutType)
         return OverlayStyle(
             bgColorArgb = Color.BLACK,

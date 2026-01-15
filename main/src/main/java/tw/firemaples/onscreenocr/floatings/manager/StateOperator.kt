@@ -488,6 +488,19 @@ class StateOperatorImpl @Inject constructor(
                 ocrBlocks = ocrBlocks,
                 bitmap = fullBitmap,
             )
+            val styledOriginalBlocks = withContext(Dispatchers.Default) {
+                overlayStyleExtractor.applyStyles(
+                    bitmap = fullBitmap,
+                    blocks = originalBlocks,
+                    screenRect = screenRect,
+                )
+            }
+            val cleanBitmapDeferred = async(Dispatchers.Default) {
+                FullScreenBitmapCleaner.cleanBitmap(
+                    bitmap = fullBitmap,
+                    blocks = styledOriginalBlocks,
+                )
+            }
 
             stateNavigator.updateState(
                 NavState.FullScreenTextTranslating(
@@ -496,7 +509,7 @@ class StateOperatorImpl @Inject constructor(
                     croppedBitmap = fullBitmap,
                     recognitionResult = recognitionResult,
                     translationProviderType = translator.type,
-                    originalBlocks = originalBlocks,
+                    originalBlocks = styledOriginalBlocks,
                 )
             )
 
@@ -510,13 +523,14 @@ class StateOperatorImpl @Inject constructor(
                 val translationResult = translateBlocks(
                     translator = translator,
                     sourceLangCode = recognitionResult.langCode,
-                    originalBlocks = originalBlocks,
+                    originalBlocks = styledOriginalBlocks,
                     fallbackRect = screenRect,
                 )
             ) {
                 is BlockTranslationResult.Success -> translationResult.translatedBlocks
 
                 is BlockTranslationResult.SourceLangNotSupport -> {
+                    cleanBitmapDeferred.cancel()
                     FirebaseEvent.logTranslationSourceLangNotSupport(
                         translator, recognitionResult.langCode,
                     )
@@ -525,6 +539,7 @@ class StateOperatorImpl @Inject constructor(
                 }
 
                 is BlockTranslationResult.Failed -> {
+                    cleanBitmapDeferred.cancel()
                     FirebaseEvent.logTranslationTextFailed(translator)
                     val error = translationResult.error
                     if (error is MicrosoftAzureTranslator.Error) {
@@ -543,13 +558,20 @@ class StateOperatorImpl @Inject constructor(
                 }
             }
 
+            val cleanedFullBitmap = runCatching { cleanBitmapDeferred.await() }
+                .onFailure { logger.warn(t = it) }
+                .getOrNull()
             val styledTranslatedBlocks = withContext(Dispatchers.Default) {
                 overlayStyleExtractor.applyStyles(
-                    bitmap = fullBitmap,
+                    bitmap = cleanedFullBitmap ?: fullBitmap,
                     blocks = translatedBlocks,
                     screenRect = screenRect,
                 )
             }
+            val cleanedOverlayBitmap = cleanedFullBitmap?.let {
+                FullScreenBitmapCleaner.buildOverlayBitmap(it, styledOriginalBlocks)
+            }
+            cleanedFullBitmap?.setReusable()
 
             FirebaseEvent.logTranslationTextFinished(translator)
 
@@ -560,9 +582,10 @@ class StateOperatorImpl @Inject constructor(
                     croppedBitmap = fullBitmap,
                     recognitionResult = recognitionResult,
                     result = FullScreenTranslationResult(
-                        originalBlocks = originalBlocks,
+                        originalBlocks = styledOriginalBlocks,
                         translatedBlocks = styledTranslatedBlocks,
                         providerType = translator.type,
+                        cleanedBitmap = cleanedOverlayBitmap,
                     ),
                 )
             )
@@ -612,6 +635,7 @@ class StateOperatorImpl @Inject constructor(
                     text = block.text,
                     boundingBox = scaleRect(block.boundingBox, scaleX, scaleY),
                     lineCount = block.lineCount,
+                    fontSizeHintPx = block.fontSizeHintPx?.let { it * scaleY },
                 )
             },
         )
@@ -638,6 +662,7 @@ class StateOperatorImpl @Inject constructor(
                     boundingBox = block.boundingBox,
                     lineCountHint = block.lineCount.coerceAtLeast(1),
                     source = OverlayTextSource.Ocr,
+                    fontSizeHintPx = block.fontSizeHintPx,
                 )
             }
             .filter { it.text.isNotBlank() }
@@ -718,6 +743,7 @@ class StateOperatorImpl @Inject constructor(
                 lineCountHint = max(1, block.lineCountHint),
                 source = block.source,
                 overlayStyle = block.overlayStyle,
+                fontSizeHintPx = block.fontSizeHintPx,
             )
         }
     }
@@ -784,6 +810,7 @@ class StateOperatorImpl @Inject constructor(
                     boundingBox = mergedRect,
                     lineCountHint = max(current.lineCountHint, next.lineCountHint),
                     source = mergeSources(current.source, next.source),
+                    fontSizeHintPx = mergeFontSizeHints(current.fontSizeHintPx, next.fontSizeHintPx),
                 )
             } else {
                 result.add(current)
@@ -823,6 +850,7 @@ class StateOperatorImpl @Inject constructor(
                     boundingBox = mergedRect,
                     lineCountHint = max(1, current.lineCountHint) + max(1, next.lineCountHint),
                     source = mergeSources(current.source, next.source),
+                    fontSizeHintPx = mergeFontSizeHints(current.fontSizeHintPx, next.fontSizeHintPx),
                 )
             } else {
                 result.add(current)
@@ -939,6 +967,22 @@ class StateOperatorImpl @Inject constructor(
         }
 
         val gap = gapBetween(a, b)
+        val minHeight = min(a.height(), b.height()).toFloat()
+        if (gap > 0 && gap >= (minHeight * SEPARATOR_BLANK_GAP_HEIGHT_RATIO)) {
+            val gapLeft = a.right.coerceIn(0, bitmap.width - 1)
+            val gapRight = b.left.coerceIn(0, bitmap.width - 1)
+            if (gapRight > gapLeft &&
+                isBlankGap(
+                    bitmap = bitmap,
+                    gapLeft = gapLeft,
+                    gapRight = gapRight,
+                    overlapTop = overlapTop,
+                    overlapBottom = overlapBottom,
+                )
+            ) {
+                return true
+            }
+        }
         var leftX = (a.right - 1).coerceIn(0, bitmap.width - 1)
         var rightX = (b.left + 1).coerceIn(0, bitmap.width - 1)
         if (gap <= 0 || leftX >= rightX) {
@@ -969,6 +1013,55 @@ class StateOperatorImpl @Inject constructor(
         val avg = sum / count
         val hitRatio = hits.toFloat() / count.toFloat()
         return avg >= SEPARATOR_AVG_THRESHOLD && hitRatio >= SEPARATOR_HIT_RATIO
+    }
+
+    private fun isBlankGap(
+        bitmap: Bitmap,
+        gapLeft: Int,
+        gapRight: Int,
+        overlapTop: Int,
+        overlapBottom: Int,
+    ): Boolean {
+        val gapWidth = gapRight - gapLeft
+        if (gapWidth < SEPARATOR_BLANK_MIN_GAP_PX) {
+            return false
+        }
+        val overlapHeight = overlapBottom - overlapTop
+        if (overlapHeight < SEPARATOR_MIN_HEIGHT_PX) {
+            return false
+        }
+
+        val sampleXs = listOf(
+            gapLeft + gapWidth / 4,
+            gapLeft + gapWidth / 2,
+            gapLeft + gapWidth * 3 / 4,
+        ).map { it.coerceIn(0, bitmap.width - 1) }.distinct()
+
+        val step = max(1, overlapHeight / SEPARATOR_BLANK_SAMPLE_COUNT)
+        var sum = 0f
+        var sumSq = 0f
+        var count = 0
+        for (x in sampleXs) {
+            var y = overlapTop
+            while (y <= overlapBottom) {
+                val color = bitmap.getPixel(x, y)
+                val luma = (
+                    0.2126f * android.graphics.Color.red(color) +
+                        0.7152f * android.graphics.Color.green(color) +
+                        0.0722f * android.graphics.Color.blue(color)
+                    ) / 255f
+                sum += luma
+                sumSq += luma * luma
+                count++
+                y += step
+            }
+        }
+        if (count == 0) {
+            return false
+        }
+        val mean = sum / count
+        val variance = (sumSq / count) - (mean * mean)
+        return variance <= SEPARATOR_BLANK_LUMA_VARIANCE_THRESHOLD
     }
 
     private fun colorDistance(a: Int, b: Int): Int {
@@ -1014,6 +1107,8 @@ class StateOperatorImpl @Inject constructor(
             max(0, b.boundingBox.left - a.boundingBox.right).toFloat()
         }
         val positiveGaps = gaps.filter { it > 0f }
+        val gapMedian = if (positiveGaps.isEmpty()) 0f else median(positiveGaps)
+        val gapMax = positiveGaps.maxOrNull() ?: 0f
         val gapCv = if (positiveGaps.size >= 2) coefficientOfVariation(positiveGaps) else 1f
 
         val widthPerChar = line.map { block ->
@@ -1027,10 +1122,17 @@ class StateOperatorImpl @Inject constructor(
         val shortText = lengthMedian in 1f..MULTI_CARD_TEXT_LENGTH_MAX.toFloat()
         val heightConsistent = heightCv < MULTI_CARD_HEIGHT_CV
         val spacingRegular = gapCv < MULTI_CARD_GAP_CV
+        val gapOutlier = line.size >= MULTI_CARD_FORCE_MIN_BLOCKS &&
+            gapMedian > 0f &&
+            gapMax >= gapMedian * MULTI_CARD_GAP_OUTLIER_RATIO
+        val gapHighlyVaried = line.size >= MULTI_CARD_FORCE_MIN_BLOCKS &&
+            positiveGaps.size >= 2 &&
+            gapCv >= MULTI_CARD_GAP_CV_HIGH
         val forcedMultiCard = line.size >= MULTI_CARD_FORCE_MIN_BLOCKS &&
             lengthMedian <= MULTI_CARD_TEXT_LENGTH_FORCE_MAX &&
             heightCv < MULTI_CARD_FORCE_HEIGHT_CV
-        return forcedMultiCard || (shortText && heightConsistent && (spacingRegular || paddedRatio >= MULTI_CARD_PADDED_RATIO))
+        return gapOutlier || gapHighlyVaried || forcedMultiCard ||
+            (shortText && heightConsistent && (spacingRegular || paddedRatio >= MULTI_CARD_PADDED_RATIO))
     }
 
     private fun visibleCharCount(text: String): Int {
@@ -1078,6 +1180,16 @@ class StateOperatorImpl @Inject constructor(
             return a
         }
         return OverlayTextSource.Mixed
+    }
+
+    private fun mergeFontSizeHints(a: Float?, b: Float?): Float? {
+        if (a == null) {
+            return b
+        }
+        if (b == null) {
+            return a
+        }
+        return min(a, b)
     }
 
     private fun calculateIoU(a: Rect, b: Rect): Float {
@@ -1191,6 +1303,7 @@ class StateOperatorImpl @Inject constructor(
                     boundingBox = block.boundingBox,
                     lineCountHint = block.lineCountHint,
                     source = block.source,
+                    fontSizeHintPx = block.fontSizeHintPx,
                 )
             }
             return BlockTranslationResult.Success(translatedBlocks)
@@ -1262,6 +1375,7 @@ class StateOperatorImpl @Inject constructor(
                 boundingBox = block.boundingBox,
                 lineCountHint = block.lineCountHint,
                 source = block.source,
+                fontSizeHintPx = block.fontSizeHintPx,
             )
         }
         return BlockTranslationResult.Success(translatedBlocks)
@@ -1349,6 +1463,7 @@ class StateOperatorImpl @Inject constructor(
                     boundingBox = block.boundingBox,
                     lineCountHint = block.lineCountHint,
                     source = block.source,
+                    fontSizeHintPx = block.fontSizeHintPx,
                 )
             }
         } else {
@@ -1383,6 +1498,8 @@ class StateOperatorImpl @Inject constructor(
         const val MULTI_CARD_TEXT_LENGTH_MAX = 6
         const val MULTI_CARD_HEIGHT_CV = 0.2f
         const val MULTI_CARD_GAP_CV = 0.35f
+        const val MULTI_CARD_GAP_CV_HIGH = 0.6f
+        const val MULTI_CARD_GAP_OUTLIER_RATIO = 2.2f
         const val MULTI_CARD_PADDED_RATIO = 0.6f
         const val MULTI_CARD_PADDED_MULTIPLIER = 1.6f
         const val MULTI_CARD_FORCE_MIN_BLOCKS = 3
@@ -1394,6 +1511,10 @@ class StateOperatorImpl @Inject constructor(
         const val SEPARATOR_DIFF_THRESHOLD = 60
         const val SEPARATOR_AVG_THRESHOLD = 50f
         const val SEPARATOR_HIT_RATIO = 0.5f
+        const val SEPARATOR_BLANK_GAP_HEIGHT_RATIO = 0.8f
+        const val SEPARATOR_BLANK_MIN_GAP_PX = 4
+        const val SEPARATOR_BLANK_SAMPLE_COUNT = 8
+        const val SEPARATOR_BLANK_LUMA_VARIANCE_THRESHOLD = 0.004f
     }
 
     private fun startTranslation(

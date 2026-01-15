@@ -1,5 +1,6 @@
 package tw.firemaples.onscreenocr.floatings.compose.fullscreen
 
+import android.graphics.Bitmap
 import android.graphics.Rect
 import androidx.compose.ui.unit.IntOffset
 import kotlinx.coroutines.CoroutineScope
@@ -16,6 +17,7 @@ import tw.firemaples.onscreenocr.floatings.manager.OverlayTextBlock
 import tw.firemaples.onscreenocr.floatings.manager.OverlayTextSource
 import tw.firemaples.onscreenocr.floatings.manager.StateNavigator
 import tw.firemaples.onscreenocr.recognition.RecognitionResult
+import tw.firemaples.onscreenocr.utils.setReusable
 import javax.inject.Inject
 
 interface FullScreenTranslationViewModel {
@@ -31,6 +33,8 @@ data class FullScreenTranslationState(
     val showOriginal: Boolean = false,
     val originalBlocks: List<OverlayTextBlock> = emptyList(),
     val translatedBlocks: List<OverlayTextBlock> = emptyList(),
+    val originalBitmap: Bitmap? = null,
+    val cleanedBitmap: Bitmap? = null,
     val rootOffset: IntOffset = IntOffset.Zero,
 )
 
@@ -74,25 +78,32 @@ class FullScreenTranslationViewModelImpl @Inject constructor(
     }
 
     private fun updateState(navState: NavState) {
+        val previousCleaned = state.value.cleanedBitmap
         when (navState) {
             NavState.FullScreenCapturing -> {
+                previousCleaned?.setReusable()
                 state.update {
                     it.copy(
                         isProcessing = true,
                         showOriginal = false,
                         originalBlocks = emptyList(),
                         translatedBlocks = emptyList(),
+                        originalBitmap = null,
+                        cleanedBitmap = null,
                     )
                 }
             }
 
             is NavState.FullScreenTextRecognizing -> {
+                previousCleaned?.setReusable()
                 state.update {
                     it.copy(
                         isProcessing = true,
                         showOriginal = false,
                         originalBlocks = emptyList(),
                         translatedBlocks = emptyList(),
+                        originalBitmap = navState.croppedBitmap,
+                        cleanedBitmap = null,
                     )
                 }
             }
@@ -104,28 +115,37 @@ class FullScreenTranslationViewModelImpl @Inject constructor(
                         fallbackRect = navState.selectedRect,
                     )
                 }
+                previousCleaned?.setReusable()
                 state.update {
                     it.copy(
                         isProcessing = true,
                         showOriginal = false,
                         originalBlocks = originalBlocks,
                         translatedBlocks = emptyList(),
+                        originalBitmap = navState.croppedBitmap,
+                        cleanedBitmap = null,
                     )
                 }
             }
 
             is NavState.FullScreenTextTranslated -> {
+                if (previousCleaned != null && previousCleaned != navState.result.cleanedBitmap) {
+                    previousCleaned.setReusable()
+                }
                 state.update {
                     it.copy(
                         isProcessing = false,
                         showOriginal = false,
                         originalBlocks = navState.result.originalBlocks,
                         translatedBlocks = navState.result.translatedBlocks,
+                        originalBitmap = navState.croppedBitmap,
+                        cleanedBitmap = navState.result.cleanedBitmap,
                     )
                 }
             }
 
             NavState.Idle -> {
+                previousCleaned?.setReusable()
                 state.update {
                     FullScreenTranslationState()
                 }
@@ -157,6 +177,7 @@ class FullScreenTranslationViewModelImpl @Inject constructor(
                 boundingBox = block.boundingBox,
                 lineCountHint = block.lineCount.coerceAtLeast(1),
                 source = OverlayTextSource.Ocr,
+                fontSizeHintPx = block.fontSizeHintPx,
             )
         }
     }
