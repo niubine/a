@@ -4,7 +4,6 @@ import android.graphics.Rect
 import junit.framework.TestCase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import tw.firemaples.onscreenocr.pref.AppPref
 
 class GeneralRepositoryTest : TestCase() {
 
@@ -24,19 +23,4 @@ class GeneralRepositoryTest : TestCase() {
         assertEquals(rect, result)
     }
 
-    fun testIsReadmeAlreadyShown() = runBlocking {
-        AppPref.lastReadmeShownVersion = null
-
-        assertFalse(repo.isReadmeAlreadyShown().first())
-
-        assertTrue(repo.isReadmeAlreadyShown().first())
-    }
-
-    fun testIsVersionHistoryAlreadyShown() = runBlocking {
-        AppPref.lastVersionHistoryShownVersion = null
-
-        assertTrue(repo.showVersionHistory().first())
-
-        assertFalse(repo.showVersionHistory().first())
-    }
 }

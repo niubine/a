@@ -17,7 +17,6 @@ task ensureFiles {
     if (buildParams.contains("ProdRelease".toLowerCase())) {
         println("#### Checking must-have files ####")
         assert file("./src/prod/google-services.json").exists()
-        assert file("./src/prod/res/values/config_ad.xml").exists()
         println("#### Must-have files included ####")
     }
 }
@@ -35,7 +34,6 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField "boolean", "DISABLE_LOGGING", "true"
-        buildConfigField "boolean", "ENABLE_ADS", "true"
 
         ndk {
             abiFilters "arm64-v8a"
@@ -76,7 +74,6 @@ android {
             applicationId "tw.firemaples.onscreenocr_debug"
 
             buildConfigField "boolean", "DISABLE_LOGGING", "false"
-            buildConfigField "boolean", "ENABLE_ADS", "false"
         }
         prod {
             dimension "tier"
@@ -224,34 +221,6 @@ dependencies {
 
     // koral--/android-gif-drawable
     implementation 'pl.droidsonroids.gif:android-gif-drawable:1.2.29'
-
-//    // Ad network mediation - Mopub
-//    implementation('com.mopub:mopub-sdk:+@aar') {
-//        transitive = true
-//    }
-//    implementation('com.mopub:mopub-sdk-banner:+@aar') {
-//        transitive = true
-//    }
-//    // Facebook Ad network - Audience network
-//    implementation 'com.facebook.android:audience-network-sdk:6.5.0'
-//    implementation 'com.mopub.mediation:facebookaudiencenetwork:6.5.0.0'
-//    // Google Ad network - Admob
-//    implementation 'com.google.android.gms:play-services-ads:20.6.0'
-//    implementation 'com.mopub.mediation:admob:20.2.0.0'
-//    // Adcolony Ad network
-//    implementation 'com.adcolony:sdk:4.5.0'
-//    implementation 'com.mopub.mediation:adcolony:4.5.0.1'
-
-    // Admob
-    implementation 'com.google.android.gms:play-services-ads:23.6.0'
-    // Facebook Ad network
-    implementation 'com.google.ads.mediation:facebook:6.19.0.0'
-    // Adcolony Ad network
-    implementation 'com.google.ads.mediation:adcolony:4.8.0.2'
-    // To fix build failed with issue
-    // Missing class com.facebook.infer.annotation.Nullsafe (referenced from: com.facebook.ads.NativeAdBase)
-    // https://stackoverflow.com/a/74718984/2906153
-    implementation 'com.facebook.infer.annotation:infer-annotation:0.18.0'
 
     // TouchImageView
     implementation 'com.github.MikeOrtiz:TouchImageView:3.7.1'

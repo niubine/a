@@ -12,7 +12,6 @@ import tw.firemaples.onscreenocr.receivers.SamsungSpenInsertedReceiver
 import java.util.*
 
 object SettingUtil {
-    private const val README_VERSION = "2.2.0"
     private const val KEY_DEVICE_ID = "KEY_DEVICE_ID"
     private const val KEY_DEBUG_MODE = "KEY_DEBUG_MODE"
     private const val KEY_APP_SHOWING = "KEY_APP_SHOWING"
@@ -26,7 +25,6 @@ object SettingUtil {
     private const val KEY_REMEMBER_LAST_SELECTION = "KEY_REMEMBER_LAST_SELECTION"
     private const val KEY_LAST_SELECTION_AREA = "KEY_LAST_SELECTION_AREA"
     private const val KEY_VERSION_HISTORY_SHOWN_VERSION = "KEY_VERSION_HISTORY_SHOWN_VERSION"
-    private const val KEY_HOW_TO_USE_SHOWN_VERSION = "KEY_HOW_TO_USE_SHOWN_VERSION"
     private const val KEY_LAST_MAIN_BAR_POSITION_X = "KEY_LAST_MAIN_BAR_POSITION_X"
     private const val KEY_LAST_MAIN_BAR_POSITION_Y = "KEY_LAST_MAIN_BAR_POSITION_Y"
     private const val KEY_FIREBASE_REMOTE_CONFIG_FETCH_INTERVAL_SEC = "KEY_FIREBASE_REMOTE_CONFIG_FETCH_INTERVAL_SEC"
@@ -148,17 +146,6 @@ object SettingUtil {
             val result = shownVersion?.equals(versionName, ignoreCase = true) == true
             if (!result) {
                 sp.edit().putString(KEY_VERSION_HISTORY_SHOWN_VERSION, versionName).apply()
-            }
-            return result
-        }
-
-    val isReadmeAlreadyShown: Boolean
-        get() {
-            val currentVersion = README_VERSION
-
-            val result = sp.getString(KEY_HOW_TO_USE_SHOWN_VERSION, null) == currentVersion
-            if (!result) {
-                sp.edit().putString(KEY_HOW_TO_USE_SHOWN_VERSION, currentVersion).apply()
             }
             return result
         }

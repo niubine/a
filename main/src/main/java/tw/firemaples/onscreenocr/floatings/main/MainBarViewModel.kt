@@ -38,7 +38,6 @@
 //        private const val MENU_PRIVACY_POLICY = "privacy_policy"
 //        private const val MENU_ABOUT = "about"
 //        private const val MENU_VERSION_HISTORY = "version_history"
-//        private const val MENU_README = "readme"
 //        private const val MENU_HIDE = "hide"
 //        private const val MENU_EXIT = "exit"
 //    }
@@ -73,8 +72,6 @@
 //    private val _showVersionHistory = SingleLiveEvent<Boolean>()
 //    val showVersionHistory: LiveData<Boolean> = _showVersionHistory
 //
-//    private val _showReadme = SingleLiveEvent<Boolean>()
-//    val showReadme: LiveData<Boolean> = _showReadme
 //
 //    private val logger: Logger by lazy { Logger(MainBarViewModel::class) }
 //    private val context: Context by lazy { Utils.context }
@@ -84,7 +81,6 @@
 //        MENU_PRIVACY_POLICY to context.getString(R.string.menu_privacy_policy),
 //        MENU_ABOUT to context.getString(R.string.menu_about),
 //        MENU_VERSION_HISTORY to context.getString(R.string.menu_version_history),
-//        MENU_README to context.getString(R.string.menu_readme),
 //        MENU_HIDE to context.getString(R.string.menu_hide),
 //        MENU_EXIT to context.getString(R.string.menu_exit),
 //    )
@@ -126,10 +122,6 @@
 //        }
 //        viewScope.launch {
 ////            setupButtons(floatingStateManager.currentState)
-//
-//            if (!repo.isReadmeAlreadyShown().first()) {
-//                _showReadme.value = true
-//            }
 //
 //            if (repo.showVersionHistory().first()) {
 //                _showVersionHistory.value = true
@@ -219,10 +211,6 @@
 //
 //            MENU_VERSION_HISTORY -> {
 //                _showVersionHistory.value = true
-//            }
-//
-//            MENU_README -> {
-//                _showReadme.value = true
 //            }
 //
 //            MENU_HIDE -> {

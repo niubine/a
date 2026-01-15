@@ -56,7 +56,6 @@
     <string name="pref_summary_off_limit_result_view_max_width">Dynamic width based on the content</string>
 
     <string name="menu_setting">Setting</string>
-    <string name="menu_readme">Readme</string>
     <string name="menu_hide">Hide</string>
     <string name="menu_exit">Exit</string>
     <string name="toolbar_region_capture">Region</string>
@@ -93,13 +92,11 @@
     <string name="msg_image_reader_format_unmatched">Found temporary error, please try it again. (Image reader format)</string>
     <string name="msg_translator_provider_does_not_support_the_ocr_lang">This translation provider does not support the selected recognition language.</string>
     <string name="error_full_screen_translation_not_supported">Full screen translation is not supported by the current translation provider.</string>
-    <string name="full_screen_translation_hint">Hold to show the original text, release to show translation, swipe up to close.</string>
     <string name="msg_please_restart_the_app_to_take_effect">Please restart the app to take effect</string>
     <string name="msg_grant_posting_notification_permission_rationale">Grant posting notification permission to restore/hide the app easier</string>
     <string name="btn_request_again">Request Again</string>
 
     <string name="title_error">Error</string>
-    <string name="title_guide">How to use</string>
     <string name="title_failed_to_check_resources">Failed to check resources</string>
     <string name="title_download">Download</string>
     <string name="title_resources_downloading">Resources downloading</string>

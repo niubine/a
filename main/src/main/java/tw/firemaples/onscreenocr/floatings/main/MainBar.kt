@@ -10,7 +10,6 @@
 //import tw.firemaples.onscreenocr.floatings.manager.NavState
 //import tw.firemaples.onscreenocr.floatings.manager.StateNavigator
 //import tw.firemaples.onscreenocr.floatings.menu.MenuView
-//import tw.firemaples.onscreenocr.floatings.readme.ReadmeView
 //import tw.firemaples.onscreenocr.floatings.translationSelectPanel.TranslationSelectPanel
 //import tw.firemaples.onscreenocr.log.FirebaseEvent
 //import tw.firemaples.onscreenocr.pages.setting.SettingActivity
@@ -151,9 +150,6 @@
 //            VersionHistoryView(context).attachToScreen()
 //        }
 //
-//        viewModel.showReadme.observe(lifecycleOwner) {
-//            ReadmeView(context).attachToScreen()
-//        }
 //    }
 //
 //    override fun onAttachedToScreen() {
