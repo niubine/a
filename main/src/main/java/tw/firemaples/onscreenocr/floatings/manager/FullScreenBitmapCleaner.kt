@@ -10,6 +10,7 @@ import org.opencv.core.Mat
 import org.opencv.core.Point
 import org.opencv.core.Scalar
 import org.opencv.core.Size
+import org.opencv.photo.Photo
 import org.opencv.imgproc.Imgproc
 import tw.firemaples.onscreenocr.utils.Logger
 import kotlin.math.max
@@ -63,7 +64,7 @@ object FullScreenBitmapCleaner {
                 )
                 Imgproc.dilate(mask, mask, kernel)
                 kernel.release()
-                Imgproc.inpaint(output, mask, output, INPAINT_RADIUS, Imgproc.INPAINT_TELEA)
+                Photo.inpaint(output, mask, output, INPAINT_RADIUS, Photo.INPAINT_TELEA)
             }
 
             val resultBitmap = Bitmap.createBitmap(
