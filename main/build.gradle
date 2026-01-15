@@ -219,6 +219,9 @@ dependencies {
     implementation 'cz.adaptech.tesseract4android:tesseract4android:4.8.0'
 //    implementation 'cz.adaptech:tesseract4android:4.1.0'
 
+    // OpenCV
+    implementation 'org.opencv:opencv-android:4.9.0'
+
     // koral--/android-gif-drawable
     implementation 'pl.droidsonroids.gif:android-gif-drawable:1.2.29'
 

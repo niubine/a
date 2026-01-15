@@ -31,6 +31,10 @@ class GoogleMLKitTextRecognizer : TextRecognizer {
         private const val SEGMENT_GAP_MIN_PX = 2
         private const val SEGMENT_AGGRESSIVE_MIN_ELEMENTS = 3
         private const val SEGMENT_FONT_HEIGHT_MULTIPLIER = 1.15f
+        private const val SEGMENT_SMALL_TEXT_HEIGHT_PX = 14f
+        private const val SEGMENT_SMALL_TEXT_GAP_MULTIPLIER = 1.35f
+        private const val SEGMENT_GAP_OUTLIER_RATIO = 2.2f
+        private const val SEGMENT_GAP_MEDIAN_FORCE_RATIO = 0.9f
 
         fun getSupportedLanguageList(context: Context): List<RecognitionLanguage> {
             val res = context.resources
@@ -223,14 +227,32 @@ class GoogleMLKitTextRecognizer : TextRecognizer {
                 val medianH = median(heights)
                 val medianW = median(widths)
                 val gapThreshold = resolveSegmentGapThreshold(sorted.size, medianH, medianW)
+                val gaps = sorted.zipWithNext { current, next ->
+                    max(0, next.boundingBox.left - current.boundingBox.right).toFloat()
+                }
+                val positiveGaps = gaps.filter { it > 0f }
+                val gapMedian = if (positiveGaps.isEmpty()) 0f else median(positiveGaps)
+                val smallText = medianH in 1f..SEGMENT_SMALL_TEXT_HEIGHT_PX
+                val adjustedGapThreshold = if (smallText) {
+                    gapThreshold * SEGMENT_SMALL_TEXT_GAP_MULTIPLIER
+                } else {
+                    gapThreshold
+                }
+                val forceSplitOnLargeMedian =
+                    gapMedian >= adjustedGapThreshold * SEGMENT_GAP_MEDIAN_FORCE_RATIO
                 val joiner = resolveElementJoiner(line.text)
 
                 val buffer = mutableListOf<ElementInfo>()
                 buffer.add(sorted.first())
                 for (next in sorted.drop(1)) {
                     val previous = buffer.last()
-                    val gap = max(0, next.boundingBox.left - previous.boundingBox.right)
-                    if (gap.toFloat() >= gapThreshold) {
+                    val gap = max(0, next.boundingBox.left - previous.boundingBox.right).toFloat()
+                    val allowSplit = if (smallText && !forceSplitOnLargeMedian) {
+                        gapMedian <= 0f || gap >= gapMedian * SEGMENT_GAP_OUTLIER_RATIO
+                    } else {
+                        true
+                    }
+                    if (gap >= adjustedGapThreshold && allowSplit) {
                         addSegment(buffer, joiner, rtl, segments)
                         buffer.clear()
                     }

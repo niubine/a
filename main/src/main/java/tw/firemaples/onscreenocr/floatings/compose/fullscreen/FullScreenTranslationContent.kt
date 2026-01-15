@@ -1,6 +1,7 @@
 package tw.firemaples.onscreenocr.floatings.compose.fullscreen
 
 import android.graphics.Rect
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -23,9 +24,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
@@ -55,6 +58,11 @@ fun FullScreenTranslationContent(
         animationSpec = tween(durationMillis = 140),
         label = "translationAlpha",
     )
+    val backgroundBitmap = if (state.showOriginal) {
+        state.originalBitmap
+    } else {
+        state.cleanedBitmap ?: state.originalBitmap
+    }
 
     LaunchedEffect(Unit) {
         val rootLocation = requestRootLocationOnScreen.invoke()
@@ -90,6 +98,15 @@ fun FullScreenTranslationContent(
                 }
             }
     ) {
+        backgroundBitmap?.let { bitmap ->
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.FillBounds,
+            )
+        }
+
         state.translatedBlocks.filter { it.text.isNotBlank() }.forEach { block ->
             OverlayText(
                 block = block,

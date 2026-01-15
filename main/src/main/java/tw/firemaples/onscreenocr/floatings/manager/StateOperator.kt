@@ -488,6 +488,19 @@ class StateOperatorImpl @Inject constructor(
                 ocrBlocks = ocrBlocks,
                 bitmap = fullBitmap,
             )
+            val styledOriginalBlocks = withContext(Dispatchers.Default) {
+                overlayStyleExtractor.applyStyles(
+                    bitmap = fullBitmap,
+                    blocks = originalBlocks,
+                    screenRect = screenRect,
+                )
+            }
+            val cleanBitmapDeferred = async(Dispatchers.Default) {
+                FullScreenBitmapCleaner.cleanBitmap(
+                    bitmap = fullBitmap,
+                    blocks = styledOriginalBlocks,
+                )
+            }
 
             stateNavigator.updateState(
                 NavState.FullScreenTextTranslating(
@@ -496,7 +509,7 @@ class StateOperatorImpl @Inject constructor(
                     croppedBitmap = fullBitmap,
                     recognitionResult = recognitionResult,
                     translationProviderType = translator.type,
-                    originalBlocks = originalBlocks,
+                    originalBlocks = styledOriginalBlocks,
                 )
             )
 
@@ -510,13 +523,14 @@ class StateOperatorImpl @Inject constructor(
                 val translationResult = translateBlocks(
                     translator = translator,
                     sourceLangCode = recognitionResult.langCode,
-                    originalBlocks = originalBlocks,
+                    originalBlocks = styledOriginalBlocks,
                     fallbackRect = screenRect,
                 )
             ) {
                 is BlockTranslationResult.Success -> translationResult.translatedBlocks
 
                 is BlockTranslationResult.SourceLangNotSupport -> {
+                    cleanBitmapDeferred.cancel()
                     FirebaseEvent.logTranslationSourceLangNotSupport(
                         translator, recognitionResult.langCode,
                     )
@@ -525,6 +539,7 @@ class StateOperatorImpl @Inject constructor(
                 }
 
                 is BlockTranslationResult.Failed -> {
+                    cleanBitmapDeferred.cancel()
                     FirebaseEvent.logTranslationTextFailed(translator)
                     val error = translationResult.error
                     if (error is MicrosoftAzureTranslator.Error) {
@@ -543,9 +558,12 @@ class StateOperatorImpl @Inject constructor(
                 }
             }
 
+            val cleanedBitmap = runCatching { cleanBitmapDeferred.await() }
+                .onFailure { logger.warn(t = it) }
+                .getOrNull()
             val styledTranslatedBlocks = withContext(Dispatchers.Default) {
                 overlayStyleExtractor.applyStyles(
-                    bitmap = fullBitmap,
+                    bitmap = cleanedBitmap ?: fullBitmap,
                     blocks = translatedBlocks,
                     screenRect = screenRect,
                 )
@@ -560,9 +578,10 @@ class StateOperatorImpl @Inject constructor(
                     croppedBitmap = fullBitmap,
                     recognitionResult = recognitionResult,
                     result = FullScreenTranslationResult(
-                        originalBlocks = originalBlocks,
+                        originalBlocks = styledOriginalBlocks,
                         translatedBlocks = styledTranslatedBlocks,
                         providerType = translator.type,
+                        cleanedBitmap = cleanedBitmap,
                     ),
                 )
             )
